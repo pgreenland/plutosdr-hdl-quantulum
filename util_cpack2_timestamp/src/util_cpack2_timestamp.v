@@ -1,11 +1,16 @@
 `timescale 1ns / 1ps
 
 module util_cpack2_timestamp(
-    // Clock and reset control
+    // Clock, should be faster than ADC sample clock. Providing time between samples for timestamping
     input clk,
+
+    // ADC sample clock
+    input adc_clk,
+
+    // Reset - syncrononous to ADC sample clock
     input reset,
 
-    // Timestamp to sample and report every x samples
+    // Timestamp to sample and report every x samples - syncrononous to clk
     input [63:0] timestamp,
 
     /*
@@ -29,15 +34,52 @@ module util_cpack2_timestamp(
     input [15:0] fifo_wr_data_2,
     input [15:0] fifo_wr_data_3,
 
-    // FIFO output
+    // FIFO output - syncrononous to clk
     output packed_fifo_wr_en,
     input packed_fifo_wr_overflow,
     output packed_fifo_wr_sync,
     output [63:0] packed_fifo_wr_data
 );
+    // Syncronized reset from ADC domain
+    wire reset_synced;
+
+    // Syncronize reset from ADC domain
+    cdc_sync_bits sync_reset (
+        .clk_out(clk),
+        .reset(0),
+        .bits_in(reset),
+        .bits_out(reset_synced)
+    );
+
+    // Syncronized timestamp every signal
+    wire [31:0] timestamp_every_synced;
+
+    // Syncronize timestamp every
+    cdc_sync_data_freeze #( 
+        .NUM_BITS (32)
+    ) sync_timestamp_every (
+        .clk_in(adc_clk),
+        .clk_out(clk),
+        .bits_in(timestamp_every),
+        .bits_out(timestamp_every_synced)
+    );
+
     // Pack enables into a single signal
     wire [3:0] enable_s;
     assign enable_s = {enable_3, enable_2, enable_1, enable_0};
+
+    // Syncronized enable signal
+    wire [3:0] enable_s_synced;
+
+    // Syncronize enables
+    cdc_sync_data_freeze #( 
+        .NUM_BITS (4)
+    ) sync_enable (
+        .clk_in(adc_clk),
+        .clk_out(clk),
+        .bits_in(enable_s),
+        .bits_out(enable_s_synced)
+    );
 
     // Enable count signal
     wire [2:0] enable_count_s;
@@ -49,7 +91,7 @@ module util_cpack2_timestamp(
     count_bits #(
         .BITS_WIDTH (4)
     ) count_bits_impl (
-        .bits(enable_s),
+        .bits(enable_s_synced),
         .count(enable_count_s)
     );
 
@@ -61,7 +103,7 @@ module util_cpack2_timestamp(
 
     // Convert enable signal into index array
     bits_to_indexes bits_to_indexes_impl (
-        .bits(enable_s),
+        .bits(enable_s_synced),
         .index_0(enable_indexes_s[0]),
         .index_1(enable_indexes_s[1]),
         .index_2(enable_indexes_s[2]),
@@ -78,7 +120,7 @@ module util_cpack2_timestamp(
     always @(posedge clk) begin : monitor_enable_for_changes
         integer i;
 
-        if (reset == 'b1) begin
+        if (reset_synced == 'b1) begin
             // Reset last enable state
             last_enable_s <= 'h0;
 
@@ -89,10 +131,10 @@ module util_cpack2_timestamp(
             for (i = 0; i < 4; i = i + 1) enable_indexes[i] <= 'h0;
         end else begin
             // Strobe enables changed if last and current enable values don't match
-            enables_changed <= (enable_s != last_enable_s) ? 'b1 : 'b0; 
+            enables_changed <= (enable_s_synced != last_enable_s) ? 'b1 : 'b0; 
 
             // Cache enable state
-            last_enable_s <= enable_s;
+            last_enable_s <= enable_s_synced;
 
             // Update count
             enable_count <= enable_count_s;
@@ -103,28 +145,67 @@ module util_cpack2_timestamp(
     end
 
     // Pack data inputs into single signal
-    wire [63:0] fifo_wr_data_s;
-    assign fifo_wr_data_s = {fifo_wr_data_3, fifo_wr_data_2, fifo_wr_data_1, fifo_wr_data_0};
+    wire [63:0] fifo_wr_data_s = {fifo_wr_data_3, fifo_wr_data_2, fifo_wr_data_1, fifo_wr_data_0};
 
-    // Input cache register - storing a copy of the last input allowing it to be worked on over several cycles
-    reg [63:0] fifo_wr_data_int;
+    // Reset busy signals
+    wire sync_fifo_wr_reset_busy;
+    wire sync_fifo_rd_reset_busy;
 
-    // Update cache registers when new data arrives
-    always @(posedge clk) begin
-        if (fifo_wr_en == 'b1) begin
-            // Write strobe high, capture data
-            fifo_wr_data_int <= fifo_wr_data_s;
-        end
-    end
+    // Write enable signal
+    wire sync_fifo_wr_en;
+    assign sync_fifo_wr_en = fifo_wr_en & ~(reset || sync_fifo_wr_reset_busy); // Write whenever ADC ready but not in reset
+
+    // Read empty / enable signals
+    wire sync_fifo_rd_empty;
+    reg sync_fifo_rd_en;
+
+    // Data read from fifo
+    wire [63:0] fifo_wr_data_int;
+
+    // Bodge signals with timestamp
+    wire [127:0] fifo_wr_data_s_with_timestamp;
+    assign fifo_wr_data_s_with_timestamp = {timestamp, fifo_wr_data_s};
+    wire [127:0] fifo_wr_data_int_with_timestamp;
+    wire [63:0] timestamp_temp;
+    assign timestamp_temp = fifo_wr_data_int_with_timestamp[127:64];
+    assign fifo_wr_data_int = fifo_wr_data_int_with_timestamp[63:0];
+
+    // Syncronizing fifo
+    xpm_fifo_async #(
+       //.FIFO_MEMORY_TYPE("distributed"),
+       .FIFO_WRITE_DEPTH(16),
+       //.READ_DATA_WIDTH(64),
+       .READ_DATA_WIDTH(128),
+       .SIM_ASSERT_CHK(1),
+       //.WRITE_DATA_WIDTH(64)
+       .WRITE_DATA_WIDTH(128)
+    )
+    data_sync (  
+       //.data_valid(data_valid),
+
+       //.dout(fifo_wr_data_int),
+       .dout(fifo_wr_data_int_with_timestamp),
+       .empty(sync_fifo_rd_empty),
+       .rd_rst_busy(sync_fifo_rd_reset_busy),
+       .wr_rst_busy(sync_fifo_wr_reset_busy),
+       //.din(fifo_wr_data_s),
+       .din(fifo_wr_data_s_with_timestamp),
+       .rd_clk(clk),
+       .rd_en(sync_fifo_rd_en),
+       .rst(reset),
+       .wr_clk(adc_clk),
+       .wr_en(sync_fifo_wr_en)
+    );
 
     // Define state machine states
     parameter STATE_RESET = 0;
     parameter STATE_WAIT_FOR_DATA = 1;
-    parameter STATE_TIMESTAMP_HEADER = 2;
-    parameter STATE_TIMESTAMP_VALUE = 3;
-    parameter STATE_STORE_DATA = 4;
-    parameter STATE_OUTPUT_DATA = 5;
-    parameter STATE_MAX = 6;
+    parameter STATE_READ_DATA = 2;
+    parameter STATE_TIMESTAMP_HEADER = 3;
+    parameter STATE_TIMESTAMP_VALUE = 4;
+    parameter STATE_STORE_DATA = 5;
+    parameter STATE_OUTPUT_DATA = 6;
+    parameter STATE_MAX = 7;
 
     // State register
     reg [$clog2(STATE_MAX)-1:0] state;
@@ -136,7 +217,7 @@ module util_cpack2_timestamp(
     reg [63:0] timestamp_first_sample;
 
     // Timestamp sample counter, incremented on each input
-    // reset when reaches or exceeds timestamp_every input
+    // Reset when reaches or exceeds timestamp_every input
     reg [31:0] timestamp_counter;
 
     // Declare counter registers for input and output position
@@ -172,7 +253,7 @@ module util_cpack2_timestamp(
     always @(posedge clk) begin : manage_state_machine
         integer i;
 
-        if (reset == 'b1 || enables_changed == 'b1) begin
+        if (reset_synced == 'b1 || enables_changed == 'b1) begin
             // Reset was asserted or enables changed, reset state machine
             state <= STATE_RESET;
 
@@ -180,6 +261,9 @@ module util_cpack2_timestamp(
             // Act on state
             case (state)
                 STATE_RESET: begin
+                    // De-assert syncronizing FIFO read signal
+                    sync_fifo_rd_en <= 'b0;
+
                     // Reset indexes
                     index_in <= 'h0;
                     index_out <= 'h0;
@@ -191,28 +275,41 @@ module util_cpack2_timestamp(
                     state <= STATE_WAIT_FOR_DATA;
                 end
                 STATE_WAIT_FOR_DATA: begin
-                    // Wait for data write
-                    if (fifo_wr_en == 'b1 && enable_count != 0) begin
+                    // Wait for data in fifo
+                    if (sync_fifo_rd_empty == 'b0) begin
+                        // Assert read signal
+                        sync_fifo_rd_en <= 'b1;
+                        
+                        // Advance to read data
+                        state <= STATE_READ_DATA;
+                    end
+                end
+                STATE_READ_DATA: begin
+                    // De-assert read signal
+                    sync_fifo_rd_en <= 'b0;
+
+                    // Process sample if channels enabled
+                    if (enable_count != 0) begin
                         // Capture timestamp if sample is destined for first out index
                         if (index_out == 0) begin
-                            timestamp_first_sample <= timestamp;
+                            timestamp_first_sample <= timestamp_temp;
                         end
 
                         // If timestamping enabled, manage counter
-                        if (timestamp_every != 0) begin
-                            if (timestamp_counter >= (timestamp_every - 1)) begin
+                        if (timestamp_every_synced != 0) begin
+                            if (timestamp_counter >= (timestamp_every_synced - 1)) begin
                                 // Reset count
                                 timestamp_counter <= 0;
     
                             end else begin
                                 // Count sample
-                                timestamp_counter <= timestamp_counter + 1;                        
+                                timestamp_counter <= timestamp_counter + 1;
                             end
-                        end                
+                        end
 
                         // Flag if this record will be syncronized (first value in output is first enabled input or timestamp present)
                         if (index_out == 0 && index_in == 0) begin
-                            if (timestamp_every == 0) begin
+                            if (timestamp_every_synced == 0) begin
                                 // Timestamping is not enabled, output sync on data alignments
                                 buffer_synced <= 'b1;
                             end else if (timestamp_counter == 0) begin
@@ -221,7 +318,7 @@ module util_cpack2_timestamp(
                             end
                         end
 
-                        if (timestamp_counter == 0 && timestamp_every != 0) begin
+                        if (timestamp_counter == 0 && timestamp_every_synced != 0) begin
                             // Advance to output timestamp before processing data
                             state <= STATE_TIMESTAMP_HEADER;
 
@@ -246,7 +343,7 @@ module util_cpack2_timestamp(
                 STATE_STORE_DATA: begin
                     // Update next output index with data from next input index
                     for (i = 0; i < 4; i = i + 1) begin
-                        if (index_out == i) packed_data[(i*16)+:16] <= input_data;     
+                        if (index_out == i) packed_data[(i*16)+:16] <= input_data;
                     end
 
                     // Check input index
@@ -284,10 +381,10 @@ module util_cpack2_timestamp(
 
                     end else begin
                         // Return to wait for next data
-                        state <= STATE_WAIT_FOR_DATA;                   
+                        state <= STATE_WAIT_FOR_DATA;
                     end
                 end
-            endcase            
+            endcase
         end
     end
 
@@ -331,6 +428,11 @@ module util_cpack2_timestamp(
     assign packed_fifo_wr_sync = write_sync_strobe;
     assign packed_fifo_wr_data = packed_fifo_select;
 
-    // Module can't suffer from overflows itself, so pass downstream flag up
-    assign fifo_wr_overflow = packed_fifo_wr_overflow;
+    // Module can't suffer from overflows itself, so pass downstream flag up through syncronizer
+    cdc_sync_bits sync_overflow (
+        .clk_out(adc_clk),
+        .reset(0),
+        .bits_in(packed_fifo_wr_overflow),
+        .bits_out(fifo_wr_overflow)
+    );
 endmodule

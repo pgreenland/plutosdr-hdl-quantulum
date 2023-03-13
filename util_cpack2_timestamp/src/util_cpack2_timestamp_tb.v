@@ -26,6 +26,7 @@ module util_cpack2_timestamp_tb;
         .SAMPLES_PER_CHANNEL (1)
     ) uut (
         .clk(clk),
+        .adc_clk(clk),
         .reset(reset),
         .timestamp(timestamp),
         .timestamp_every(timestamp_every),
@@ -97,6 +98,9 @@ module util_cpack2_timestamp_tb;
         // De-assert reset
         #3
         reset = 1'b0;
+
+        // Wait for internal fifo to come out of reset
+        #170;
 
         for (integer i = 0; i < 15; i = i + 1) begin
             // Assert enables
