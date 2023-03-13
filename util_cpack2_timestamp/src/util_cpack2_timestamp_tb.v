@@ -91,8 +91,8 @@ module util_cpack2_timestamp_tb;
         fifo_wr_data_2 = 'h0;
         fifo_wr_data_3 = 'h0;
         packed_fifo_wr_overflow = 'b0;
-        timestamp = 'h0;
-        timestamp_every = 'h4;
+        timestamp = 0;
+        timestamp_every = 4;
 
         // De-assert reset
         #3
@@ -103,15 +103,8 @@ module util_cpack2_timestamp_tb;
             {enable_0, enable_1, enable_2, enable_3} = enables[i];
             #2
 
-            // Provide a dummy record
-            fifo_wr_data_0 = 'h0000;
-            fifo_wr_data_1 = 'h0000;
-            fifo_wr_data_2 = 'h0000;
-            fifo_wr_data_3 = 'h0000;
-            fifo_wr_en = 'b1;
-            #2
-            fifo_wr_en = 'b0;
-            #8
+            // Wait while module resets data path while applying new enables
+            #4;
 
             for (integer j = 0; j < 32; j = j + 4) begin
                 // Provide record
@@ -122,7 +115,7 @@ module util_cpack2_timestamp_tb;
                 fifo_wr_en = 'b1;
                 #2
                 fifo_wr_en = 'b0;
-                #8
+                #14
                 fifo_wr_data_0 = 'h0000;
                 fifo_wr_data_1 = 'h0000;
                 fifo_wr_data_2 = 'h0000;
@@ -134,7 +127,9 @@ module util_cpack2_timestamp_tb;
     end
    
     // Wait for the rising edge of enable signal and print data / sync
-    always @(posedge packed_fifo_wr_en) begin
-        $display("Output: %h, Sync: %b", packed_fifo_wr_data, packed_fifo_wr_sync);
+    always @(posedge clk) begin
+        if (packed_fifo_wr_en == 'b1) begin
+            $display("Output: %h, Sync: %b", packed_fifo_wr_data, packed_fifo_wr_sync);
+        end
     end
 endmodule

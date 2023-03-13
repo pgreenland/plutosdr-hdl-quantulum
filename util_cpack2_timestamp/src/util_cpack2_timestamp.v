@@ -120,13 +120,24 @@ module util_cpack2_timestamp(
     // Define state machine states
     parameter STATE_RESET = 0;
     parameter STATE_WAIT_FOR_DATA = 1;
-    parameter STATE_STORE_DATA = 2;
+    parameter STATE_TIMESTAMP_HEADER = 2;
+    parameter STATE_TIMESTAMP_VALUE = 3;
+    parameter STATE_STORE_DATA = 4;
+    parameter STATE_OUTPUT_DATA = 5;
+    parameter STATE_MAX = 6;
 
     // State register
-    reg [1:0] state;
+    reg [$clog2(STATE_MAX)-1:0] state;
 
     // Output registers
     reg [63:0] packed_data;
+
+    // Timestamp cache register
+    reg [63:0] timestamp_first_sample;
+
+    // Timestamp sample counter, incremented on each input
+    // reset when reaches or exceeds timestamp_every input
+    reg [31:0] timestamp_counter;
 
     // Declare counter registers for input and output position
     reg [1:0] index_in;
@@ -173,22 +184,64 @@ module util_cpack2_timestamp(
                     index_in <= 'h0;
                     index_out <= 'h0;
 
+                    // Reset sample counter
+                    timestamp_counter <= 0;
+
                     // Advance to wait for data
                     state <= STATE_WAIT_FOR_DATA;
                 end
                 STATE_WAIT_FOR_DATA: begin
                     // Wait for data write
                     if (fifo_wr_en == 'b1 && enable_count != 0) begin
-                        // TODO: Capture timestamp on first out index
-
-                        // Flag if this record will be syncronized (first value in output is first enabled input)
-                        if (index_out == 0 && index_in == 0) begin
-                            buffer_synced <= 'b1;
+                        // Capture timestamp if sample is destined for first out index
+                        if (index_out == 0) begin
+                            timestamp_first_sample <= timestamp;
                         end
 
-                        // Advance to store data
-                        state <= STATE_STORE_DATA;
+                        // If timestamping enabled, manage counter
+                        if (timestamp_every != 0) begin
+                            if (timestamp_counter >= (timestamp_every - 1)) begin
+                                // Reset count
+                                timestamp_counter <= 0;
+    
+                            end else begin
+                                // Count sample
+                                timestamp_counter <= timestamp_counter + 1;                        
+                            end
+                        end                
+
+                        // Flag if this record will be syncronized (first value in output is first enabled input or timestamp present)
+                        if (index_out == 0 && index_in == 0) begin
+                            if (timestamp_every == 0) begin
+                                // Timestamping is not enabled, output sync on data alignments
+                                buffer_synced <= 'b1;
+                            end else if (timestamp_counter == 0) begin
+                                // Timestamping is enabled, data is aligned and timestamp is being output, flag sync
+                                buffer_synced <= 'b1;
+                            end
+                        end
+
+                        if (timestamp_counter == 0 && timestamp_every != 0) begin
+                            // Advance to output timestamp before processing data
+                            state <= STATE_TIMESTAMP_HEADER;
+
+                        end else begin
+                            // Advance to store data
+                            state <= STATE_STORE_DATA;
+                        end
                     end
+                end
+                STATE_TIMESTAMP_HEADER: begin
+                    // Timestamp header should be presented on output, while strobe pulsed.
+                    // Reset synced flag, such that it's only output with timestamp header and not data
+                    buffer_synced <= 'b0;
+
+                    // Advance to output value.
+                    state <= STATE_TIMESTAMP_VALUE; 
+                end
+                STATE_TIMESTAMP_VALUE: begin
+                    // Timestamp value should be presented on output, while strobe pulsed. Advance to store current data.
+                    state <= STATE_STORE_DATA;
                 end
                 STATE_STORE_DATA: begin
                     // Update next output index with data from next input index
@@ -200,8 +253,8 @@ module util_cpack2_timestamp(
                     if (index_in == (enable_count - 1)) begin
                         // Reset index
                         index_in <= 'h0;
-                        
-                        // Return to wait state
+
+                        // Expect to return to wait state
                         state <= STATE_WAIT_FOR_DATA;
                     end else begin
                         // Increment index
@@ -213,35 +266,70 @@ module util_cpack2_timestamp(
                         // Reset index
                         index_out <= 'h0;
 
-                        // Reset synced flag
-                        buffer_synced <= 'b0;
+                        // Advance to output
+                        state <= STATE_OUTPUT_DATA;
                     end else begin
                         // Increment index
                         index_out <= index_out + 1;
+                    end
+                end
+                STATE_OUTPUT_DATA: begin
+                    // Reset synced flag
+                    buffer_synced <= 'b0;
+
+                    // If items remain to be processed, return to store
+                    if (index_in != 0) begin
+                        // Continue storing data
+                        state <= STATE_STORE_DATA;
+
+                    end else begin
+                        // Return to wait for next data
+                        state <= STATE_WAIT_FOR_DATA;                   
                     end
                 end
             endcase            
         end
     end
 
-    // Manage write strobe
-    always @(posedge clk) begin
-        // Is last word being written to output?
-        if (state == STATE_STORE_DATA && index_out == 3) begin
-            // Pulse enable strobe and sync strobe if buffer is aligned
-            write_strobe <= 'b1;
-            write_sync_strobe <= buffer_synced;
-        end else begin
-            // Reset strobes
-            write_strobe <= 'b0;
-            write_sync_strobe <= 'b0;
-        end
-    end    
+    // Select output based on state
+    reg [63:0] packed_fifo_select;
+    always @(*) begin
+        // Strobes should usually be low
+        write_strobe <= 'b0;
+        write_sync_strobe <= 'b0;
+
+        // Present data normally
+        packed_fifo_select = packed_data;
+
+        case (state)
+                STATE_TIMESTAMP_HEADER: begin
+                    // Write strobe should be high and sync presented
+                    write_strobe <= 'b1;
+                    write_sync_strobe <= buffer_synced;
+
+                    // Preset magic number
+                    packed_fifo_select = 'h504D5453454D4954;
+                end
+                STATE_TIMESTAMP_VALUE: begin
+                    // Write strobe should be high and sync presented
+                    write_strobe <= 'b1;
+                    write_sync_strobe <= buffer_synced;
+
+                    // Preset stored timestamp
+                    packed_fifo_select = timestamp_first_sample;
+                end
+                STATE_OUTPUT_DATA: begin
+                    // Write strobe should be high and sync presented
+                    write_strobe <= 'b1;
+                    write_sync_strobe <= buffer_synced;
+                end
+        endcase
+    end
 
     // Assign fifo outputs
     assign packed_fifo_wr_en = write_strobe;
     assign packed_fifo_wr_sync = write_sync_strobe;
-    assign packed_fifo_wr_data = packed_data;
+    assign packed_fifo_wr_data = packed_fifo_select;
 
     // Module can't suffer from overflows itself, so pass downstream flag up
     assign fifo_wr_overflow = packed_fifo_wr_overflow;
