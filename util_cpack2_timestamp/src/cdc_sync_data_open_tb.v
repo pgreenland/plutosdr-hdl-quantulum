@@ -1,17 +1,21 @@
 `timescale 1ns / 1ps
 
-module cdc_sync_data_freeze_tb;
+module cdc_sync_data_open_tb;
     reg clk_in;
     reg clk_out;
+    reg enable;
     reg [1:0] bits_in;
+    wire valid;
     wire [1:0] bits_out;
 
-    cdc_sync_data_freeze #( 
+    cdc_sync_data_open #( 
         .NUM_BITS (2)
     ) uut (
         .clk_in(clk_in),
         .clk_out(clk_out),
+        .enable(enable),
         .bits_in(bits_in),
+        .valid(valid),
         .bits_out(bits_out)
     );
 
@@ -29,6 +33,7 @@ module cdc_sync_data_freeze_tb;
         // Reset signals
         clk_in = 'b0;
         clk_out = 'b0;
+        enable = 'b0;
         bits_in = 'h0;
 
         // Wait for first input clock edge
@@ -38,8 +43,13 @@ module cdc_sync_data_freeze_tb;
             // Present input
             bits_in = i;
 
-            // Wait for input clock to load data and ack to be returned
-            #24;
+            // Pulse enable for input clock cycle
+            enable = 'b1;
+            #6;
+            enable = 'b0;
+
+            // Wait for input clock to load data
+            #18;
         end
 
         $finish;

@@ -26,7 +26,7 @@ module util_cpack2_timestamp(
     input enable_2,
     input enable_3,
 
-    // Channel input
+    // Channel input - syncrononous to adc_clk
     input fifo_wr_en,
     output fifo_wr_overflow,
     input [15:0] fifo_wr_data_0,
@@ -55,11 +55,12 @@ module util_cpack2_timestamp(
     wire [31:0] timestamp_every_synced;
 
     // Syncronize timestamp every
-    cdc_sync_data_freeze #( 
+    cdc_sync_data_open #( 
         .NUM_BITS (32)
     ) sync_timestamp_every (
         .clk_in(adc_clk),
         .clk_out(clk),
+        .enable(1),
         .bits_in(timestamp_every),
         .bits_out(timestamp_every_synced)
     );
@@ -72,11 +73,12 @@ module util_cpack2_timestamp(
     wire [3:0] enable_s_synced;
 
     // Syncronize enables
-    cdc_sync_data_freeze #( 
+    cdc_sync_data_open #( 
         .NUM_BITS (4)
     ) sync_enable (
         .clk_in(adc_clk),
         .clk_out(clk),
+        .enable(1),
         .bits_in(enable_s),
         .bits_out(enable_s_synced)
     );
@@ -162,34 +164,20 @@ module util_cpack2_timestamp(
     // Data read from fifo
     wire [63:0] fifo_wr_data_int;
 
-    // Bodge signals with timestamp
-    wire [127:0] fifo_wr_data_s_with_timestamp;
-    assign fifo_wr_data_s_with_timestamp = {timestamp, fifo_wr_data_s};
-    wire [127:0] fifo_wr_data_int_with_timestamp;
-    wire [63:0] timestamp_temp;
-    assign timestamp_temp = fifo_wr_data_int_with_timestamp[127:64];
-    assign fifo_wr_data_int = fifo_wr_data_int_with_timestamp[63:0];
-
     // Syncronizing fifo
     xpm_fifo_async #(
        //.FIFO_MEMORY_TYPE("distributed"),
        .FIFO_WRITE_DEPTH(16),
-       //.READ_DATA_WIDTH(64),
-       .READ_DATA_WIDTH(128),
+       .READ_DATA_WIDTH(64),
        .SIM_ASSERT_CHK(1),
-       //.WRITE_DATA_WIDTH(64)
-       .WRITE_DATA_WIDTH(128)
+       .WRITE_DATA_WIDTH(64)
     )
     data_sync (  
-       //.data_valid(data_valid),
-
-       //.dout(fifo_wr_data_int),
-       .dout(fifo_wr_data_int_with_timestamp),
+       .dout(fifo_wr_data_int),
        .empty(sync_fifo_rd_empty),
        .rd_rst_busy(sync_fifo_rd_reset_busy),
        .wr_rst_busy(sync_fifo_wr_reset_busy),
-       //.din(fifo_wr_data_s),
-       .din(fifo_wr_data_s_with_timestamp),
+       .din(fifo_wr_data_s),
        .rd_clk(clk),
        .rd_en(sync_fifo_rd_en),
        .rst(reset),
@@ -292,7 +280,7 @@ module util_cpack2_timestamp(
                     if (enable_count != 0) begin
                         // Capture timestamp if sample is destined for first out index
                         if (index_out == 0) begin
-                            timestamp_first_sample <= timestamp_temp;
+                            timestamp_first_sample <= timestamp;
                         end
 
                         // If timestamping enabled, manage counter
