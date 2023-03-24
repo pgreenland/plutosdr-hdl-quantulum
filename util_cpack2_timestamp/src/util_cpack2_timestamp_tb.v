@@ -18,7 +18,7 @@ module util_cpack2_timestamp_tb;
     wire packed_fifo_wr_en;
     reg packed_fifo_wr_overflow;
     wire packed_fifo_wr_sync;
-    wire [63:0] packed_fifo_wr_data;
+    wire [127:0] packed_fifo_wr_data;
 
     util_cpack2_timestamp #( 
         .NUM_OF_CHANNELS (4),
@@ -26,7 +26,6 @@ module util_cpack2_timestamp_tb;
         .SAMPLES_PER_CHANNEL (1)
     ) uut (
         .clk(clk),
-        .adc_clk(clk),
         .reset(reset),
         .timestamp(timestamp),
         .timestamp_every(timestamp_every),
@@ -78,10 +77,24 @@ module util_cpack2_timestamp_tb;
         enables[14] = 'b1111;
     end      
 
+    // Test mode
+    localparam MODE_READ_VECTORS = 0;
+    localparam MODE_WRITE_VECTORS = 1;
+    reg mode = MODE_READ_VECTORS;
+
+    // Test vector - sync bit + data bits
+    reg [128:0] expected_outputs [0:397];
+
     initial begin
+        // Load test vectors
+        if (mode == MODE_READ_VECTORS)
+            $readmemb("util_cpack2_timestamp_tv_vectors.mem", expected_outputs);
+
         // Reset signals
         clk = 'b0;
         reset = 'b1;
+        timestamp = 0;
+        timestamp_every = 0;
         enable_0 = 'b0;
         enable_1 = 'b0;
         enable_2 = 'b0;
@@ -92,48 +105,81 @@ module util_cpack2_timestamp_tb;
         fifo_wr_data_2 = 'h0;
         fifo_wr_data_3 = 'h0;
         packed_fifo_wr_overflow = 'b0;
-        timestamp = 0;
-        timestamp_every = 4;
 
         // De-assert reset
         #3
         reset = 1'b0;
 
-        // Wait for internal fifo to come out of reset
-        #170;
+        // Perform test sequence a number of times, with increasing timestamp every values
+        for (integer i = 0; i < 6; i = i + 1) begin
+            // Assert timestamp every
+            timestamp_every = i;
 
-        for (integer i = 0; i < 15; i = i + 1) begin
-            // Assert enables
-            {enable_0, enable_1, enable_2, enable_3} = enables[i];
-            #2
-
-            // Wait while module resets data path while applying new enables
-            #4;
-
-            for (integer j = 0; j < 32; j = j + 4) begin
-                // Provide record
-                fifo_wr_data_0 = j+1;
-                fifo_wr_data_1 = j+2;
-                fifo_wr_data_2 = j+3;
-                fifo_wr_data_3 = j+4;
-                fifo_wr_en = 'b1;
-                #2
-                fifo_wr_en = 'b0;
-                #14
-                fifo_wr_data_0 = 'h0000;
-                fifo_wr_data_1 = 'h0000;
-                fifo_wr_data_2 = 'h0000;
-                fifo_wr_data_3 = 'h0000;
+            // Iterate through enables
+            for (integer j = 0; j < 15; j = j + 1) begin
+                // Assert enables
+                {enable_0, enable_1, enable_2, enable_3} = enables[j];
+    
+                // Delay a couple of cycles to allow enables to be counted and packer to change state
+                #6; 
+    
+                for (integer k = 0; k < 48; k = k + 4) begin
+                    // Provide record
+                    fifo_wr_data_0 = k+1;
+                    fifo_wr_data_1 = k+2;
+                    fifo_wr_data_2 = k+3;
+                    fifo_wr_data_3 = k+4;
+                    fifo_wr_en = 'b1;
+                    #2
+                    fifo_wr_en = 'b0;
+                    fifo_wr_data_0 = 'h0000;
+                    fifo_wr_data_1 = 'h0000;
+                    fifo_wr_data_2 = 'h0000;
+                    fifo_wr_data_3 = 'h0000;
+                end
             end
+
+            // Delay to allow final output
+            #4;
         end
-        
+
+        // Write captured expected vectors out to file
+        if (mode == MODE_WRITE_VECTORS)
+            $writememb("util_cpack2_timestamp_tv_vectors.mem", expected_outputs);
+
+        // Got this far without error, all must be good
+        $display("Test PASSED");
+
         $finish;
     end
    
     // Wait for the rising edge of enable signal and print data / sync
+    integer expected_index = 0;
     always @(posedge clk) begin
         if (packed_fifo_wr_en == 'b1) begin
-            $display("Output: %h, Sync: %b", packed_fifo_wr_data, packed_fifo_wr_sync);
+            // Print values
+            $display("Sync: %b", packed_fifo_wr_sync);
+            $display("Output: %h", packed_fifo_wr_data[0 +: 64]);
+            $display("Output: %h", packed_fifo_wr_data[64 +: 64]);
+            
+            // Compare to expected (or update expected)
+            if (mode == MODE_READ_VECTORS) begin
+                // Compare output to expected
+                if (expected_outputs[expected_index] != {packed_fifo_wr_sync, packed_fifo_wr_data}) begin
+                    $error("Test FAILED, Expected: %h,%b got %h,%b",
+                           expected_outputs[expected_index][127:0],
+                           expected_outputs[expected_index][128],
+                           packed_fifo_wr_data,
+                           packed_fifo_wr_sync);
+                    $finish;
+                end
+            end else begin
+                // Store output as expected         
+                expected_outputs[expected_index] = {packed_fifo_wr_sync, packed_fifo_wr_data};
+            end          
+
+            // Increment index
+            expected_index = expected_index + 1;
         end
     end
 endmodule

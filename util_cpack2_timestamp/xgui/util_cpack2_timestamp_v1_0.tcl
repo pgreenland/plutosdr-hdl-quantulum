@@ -7,52 +7,46 @@ proc init_gui { IPINST } {
 
 }
 
-
-proc update_MODELPARAM_VALUE.STATE_RESET { MODELPARAM_VALUE.STATE_RESET } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_RESET". Setting updated value from the model parameter.
-set_property value 0 ${MODELPARAM_VALUE.STATE_RESET}
+proc update_PARAM_VALUE.NUM_OF_CHANNELS { PARAM_VALUE.NUM_OF_CHANNELS } {
+	# Procedure called to update NUM_OF_CHANNELS when any of the dependent parameters in the arguments change
 }
 
-proc update_MODELPARAM_VALUE.STATE_WAIT_FOR_DATA { MODELPARAM_VALUE.STATE_WAIT_FOR_DATA } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_WAIT_FOR_DATA". Setting updated value from the model parameter.
-set_property value 1 ${MODELPARAM_VALUE.STATE_WAIT_FOR_DATA}
+proc validate_PARAM_VALUE.NUM_OF_CHANNELS { PARAM_VALUE.NUM_OF_CHANNELS } {
+	# Procedure called to validate NUM_OF_CHANNELS
+	return true
 }
 
-proc update_MODELPARAM_VALUE.STATE_TIMESTAMP_HEADER { MODELPARAM_VALUE.STATE_TIMESTAMP_HEADER } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_TIMESTAMP_HEADER". Setting updated value from the model parameter.
-set_property value 3 ${MODELPARAM_VALUE.STATE_TIMESTAMP_HEADER}
+proc update_PARAM_VALUE.SAMPLES_PER_CHANNEL { PARAM_VALUE.SAMPLES_PER_CHANNEL } {
+	# Procedure called to update SAMPLES_PER_CHANNEL when any of the dependent parameters in the arguments change
 }
 
-proc update_MODELPARAM_VALUE.STATE_TIMESTAMP_VALUE { MODELPARAM_VALUE.STATE_TIMESTAMP_VALUE } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_TIMESTAMP_VALUE". Setting updated value from the model parameter.
-set_property value 4 ${MODELPARAM_VALUE.STATE_TIMESTAMP_VALUE}
+proc validate_PARAM_VALUE.SAMPLES_PER_CHANNEL { PARAM_VALUE.SAMPLES_PER_CHANNEL } {
+	# Procedure called to validate SAMPLES_PER_CHANNEL
+	return true
 }
 
-proc update_MODELPARAM_VALUE.STATE_STORE_DATA { MODELPARAM_VALUE.STATE_STORE_DATA } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_STORE_DATA". Setting updated value from the model parameter.
-set_property value 5 ${MODELPARAM_VALUE.STATE_STORE_DATA}
+proc update_PARAM_VALUE.SAMPLE_DATA_WIDTH { PARAM_VALUE.SAMPLE_DATA_WIDTH } {
+	# Procedure called to update SAMPLE_DATA_WIDTH when any of the dependent parameters in the arguments change
 }
 
-proc update_MODELPARAM_VALUE.STATE_OUTPUT_DATA { MODELPARAM_VALUE.STATE_OUTPUT_DATA } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_OUTPUT_DATA". Setting updated value from the model parameter.
-set_property value 6 ${MODELPARAM_VALUE.STATE_OUTPUT_DATA}
+proc validate_PARAM_VALUE.SAMPLE_DATA_WIDTH { PARAM_VALUE.SAMPLE_DATA_WIDTH } {
+	# Procedure called to validate SAMPLE_DATA_WIDTH
+	return true
 }
 
-proc update_MODELPARAM_VALUE.STATE_MAX { MODELPARAM_VALUE.STATE_MAX } {
+
+proc update_MODELPARAM_VALUE.NUM_OF_CHANNELS { MODELPARAM_VALUE.NUM_OF_CHANNELS PARAM_VALUE.NUM_OF_CHANNELS } {
 	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_MAX". Setting updated value from the model parameter.
-set_property value 7 ${MODELPARAM_VALUE.STATE_MAX}
+	set_property value [get_property value ${PARAM_VALUE.NUM_OF_CHANNELS}] ${MODELPARAM_VALUE.NUM_OF_CHANNELS}
 }
 
-proc update_MODELPARAM_VALUE.STATE_READ_DATA { MODELPARAM_VALUE.STATE_READ_DATA } {
+proc update_MODELPARAM_VALUE.SAMPLES_PER_CHANNEL { MODELPARAM_VALUE.SAMPLES_PER_CHANNEL PARAM_VALUE.SAMPLES_PER_CHANNEL } {
 	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	# WARNING: There is no corresponding user parameter named "STATE_READ_DATA". Setting updated value from the model parameter.
-set_property value 2 ${MODELPARAM_VALUE.STATE_READ_DATA}
+	set_property value [get_property value ${PARAM_VALUE.SAMPLES_PER_CHANNEL}] ${MODELPARAM_VALUE.SAMPLES_PER_CHANNEL}
+}
+
+proc update_MODELPARAM_VALUE.SAMPLE_DATA_WIDTH { MODELPARAM_VALUE.SAMPLE_DATA_WIDTH PARAM_VALUE.SAMPLE_DATA_WIDTH } {
+	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
+	set_property value [get_property value ${PARAM_VALUE.SAMPLE_DATA_WIDTH}] ${MODELPARAM_VALUE.SAMPLE_DATA_WIDTH}
 }
 
