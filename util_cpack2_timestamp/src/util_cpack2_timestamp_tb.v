@@ -108,39 +108,39 @@ module util_cpack2_timestamp_tb;
 
         // De-assert reset
         #3
-        reset = 1'b0;
+        reset <= 1'b0;
 
         // Perform test sequence a number of times, with increasing timestamp every values
         for (integer i = 0; i < 6; i = i + 1) begin
             // Assert timestamp every
-            timestamp_every = i;
+            timestamp_every <= i;
 
             // Iterate through enables
             for (integer j = 0; j < 15; j = j + 1) begin
                 // Assert enables
-                {enable_0, enable_1, enable_2, enable_3} = enables[j];
+                {enable_0, enable_1, enable_2, enable_3} <= enables[j];
     
                 // Delay a couple of cycles to allow enables to be counted and packer to change state
                 #6; 
     
                 for (integer k = 0; k < 48; k = k + 4) begin
                     // Provide record
-                    fifo_wr_data_0 = k+1;
-                    fifo_wr_data_1 = k+2;
-                    fifo_wr_data_2 = k+3;
-                    fifo_wr_data_3 = k+4;
-                    fifo_wr_en = 'b1;
+                    fifo_wr_data_0 <= k+1;
+                    fifo_wr_data_1 <= k+2;
+                    fifo_wr_data_2 <= k+3;
+                    fifo_wr_data_3 <= k+4;
+                    fifo_wr_en <= 'b1;
                     #2
-                    fifo_wr_en = 'b0;
-                    fifo_wr_data_0 = 'h0000;
-                    fifo_wr_data_1 = 'h0000;
-                    fifo_wr_data_2 = 'h0000;
-                    fifo_wr_data_3 = 'h0000;
+                    fifo_wr_en <= 'b0;
+                    fifo_wr_data_0 <= 'h0000;
+                    fifo_wr_data_1 <= 'h0000;
+                    fifo_wr_data_2 <= 'h0000;
+                    fifo_wr_data_3 <= 'h0000;
                 end
             end
 
             // Delay to allow final output
-            #4;
+            #6;
         end
 
         // Write captured expected vectors out to file

@@ -58,7 +58,7 @@ module packer_tb;
         reset = 'b0;
         timestamp_in = 'h0;
         enabled_chan_count = 'b0;
-        en = 'b1;
+        en = 'b0;
         data_in_0 = 'b0;
         data_in_1 = 'b0;
         data_in_2 = 'b0;
@@ -68,27 +68,30 @@ module packer_tb;
         #1;
 
         for (integer i = 0; i < 4; i = i + 1) begin
-            // De-assert enable
-            en = 'b0;
-
             // Update channel enable
-            enabled_chan_count = enabled_chans[i];
+            enabled_chan_count <= enabled_chans[i];
             #2;
-            reset = 'b1;
+            reset <= 'b1;
             #2; // Delay for entry into first state from reset
-            reset = 'b0;
+            reset <= 'b0;
 
             // Assert enable
-            en = 'b1;
+            en <= 'b1;
 
             for (integer j = 0; j < 32; j = j + 4) begin
                 // Provide record
-                data_in_0 = j+1;
-                data_in_1 = j+2;
-                data_in_2 = j+3;
-                data_in_3 = j+4;
+                data_in_0 <= j+1;
+                data_in_1 <= j+2;
+                data_in_2 <= j+3;
+                data_in_3 <= j+4;
                 #2;
             end
+            
+            // Delay for final record
+            #2;
+
+            // De-assert enable
+            en <= 'b0;
         end
 
         $finish;

@@ -15,18 +15,15 @@ module util_cpack2_timestamp #(
     input [63:0] timestamp,
 
     /*
-    ** How many blocks of samples to output between timestamp insertions
-    ** Here a block of samples is the number of 64-bit transfers required to
-    ** get the lowest enabled channel into the LSB of the word again.
+    ** How many 64-bit blocks to output between timestamp insertions
+    ** Depending on the number of enabled channels a block may represent a different number of samples.
     ** For example:
-    **  With 4 channels enabled, each 64-bit block of data has the first channel in its LSB
-    **      A block consists of one sample for each channel.
-    **  With 3 channels enabled, every 3rd 64-bit block of data has the first channel in its LSB
-    **      A block consists of 4 sample for each channel.
-    **  With 2 channels enabled, every 64-bit block of data has the first channel in its LSB
-    **      A block consists of two samples for each channel.
-    **  With 1 channel enabled, every 64-bit block of data has the first channel in its LSB
-    **      A block consists of four samples for each channel.
+    **  With 4 channels enabled, a block consists of one sample for each channel.
+    **  With 3 channels enabled, a block consists of one sample for each channel, with one to thre leftover samples.
+    **      It takes 3 blocks, yielding 4 samples per channel to get the least significant channel back in the least significant bit of the block
+    **      Timestamping here should ideally be set to a multiple of 3.
+    **  With 2 channels enabled, a block consists of two samples for each channel.
+    **  With 1 channel enabled, a block consists of four samples for each channel.
     */
     input [31:0] timestamp_every,
 
@@ -129,7 +126,7 @@ module util_cpack2_timestamp #(
                 1: cp_data_in[i] = fifo_wr_data_1;
                 2: cp_data_in[i] = fifo_wr_data_2;
                 3: cp_data_in[i] = fifo_wr_data_3;
-                default: cp_data_in[i] = fifo_wr_data_0;
+                default: cp_data_in[i] = 'h0;
             endcase
     end
 
