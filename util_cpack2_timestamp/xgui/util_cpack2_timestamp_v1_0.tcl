@@ -4,6 +4,9 @@ proc init_gui { IPINST } {
   #Adding Page
   ipgui::add_page $IPINST -name "Page 0"
 
+  ipgui::add_param $IPINST -name "NUM_OF_CHANNELS"
+  ipgui::add_param $IPINST -name "SAMPLES_PER_CHANNEL"
+  ipgui::add_param $IPINST -name "SAMPLE_DATA_WIDTH"
 
 }
 

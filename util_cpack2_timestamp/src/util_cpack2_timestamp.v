@@ -5,19 +5,19 @@ module util_cpack2_timestamp #(
   parameter SAMPLES_PER_CHANNEL = 1,
   parameter SAMPLE_DATA_WIDTH = 16
 ) (
-    // Module clock
-    input clk,
+    // ADC clock
+    input adc_clk,
 
-    // Reset - syncrononous to clock
-    input reset,
+    // DMA clock
+    input dma_clk,
 
-    // Timestamp to sample and report every timestamp_every blocks
+    // Timestamp to stamp data stream with every timestamp_every blocks, in DMA clock domain
     input [63:0] timestamp,
 
     /*
-    ** How many 64-bit blocks to output between timestamp insertions
+    ** How many NUM_OF_CHANNELS * SAMPLES_PER_CHANNEL * SAMPLE_DATA_WIDTH blocks to expect between timestamp insertions, in DMA clock domain
     ** Depending on the number of enabled channels a block may represent a different number of samples.
-    ** For example:
+    ** For example when NUM_OF_CHANNELS = 4 and SAMPLES_PER_CHANNEL = 1:
     **  With 4 channels enabled, a block consists of one sample for each channel.
     **  With 3 channels enabled, a block consists of one sample for each channel, with one to thre leftover samples.
     **      It takes 3 blocks, yielding 4 samples per channel to get the least significant channel back in the least significant bit of the block
@@ -27,138 +27,77 @@ module util_cpack2_timestamp #(
     */
     input [31:0] timestamp_every,
 
-    // Channel enables
-    input enable_0,
-    input enable_1,
-    input enable_2,
-    input enable_3,
-
-    // Channel input
-    input fifo_wr_en,
-    output fifo_wr_overflow,
-    input [SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_wr_data_0,
-    input [SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_wr_data_1,
-    input [SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_wr_data_2,
-    input [SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_wr_data_3,
+    // FIFO input
+    input packed_fifo_wr_en,
+    output packed_fifo_wr_overflow,
+    input packed_fifo_wr_sync,
+    input [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] packed_fifo_wr_data,
 
     // FIFO output
-    output packed_fifo_wr_en,
-    input packed_fifo_wr_overflow,
-    output packed_fifo_wr_sync,
-    output [2*NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] packed_fifo_wr_data
+    output packed_timestamped_fifo_wr_en,
+    input packed_timestamped_fifo_wr_overflow,
+    output packed_timestamped_fifo_wr_sync,
+    output [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] packed_timestamped_fifo_wr_data
 );
-    // Check params
-    if (NUM_OF_CHANNELS != 4) $error("Currently only 4 channels are supported");
+    // FIFO write signals
+    wire fifo_wr_rst_busy;
+    wire fifo_wr_full;
+    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_wr_data;
+    wire fifo_wr_en;
 
-    // Pack enables into a single signal
-    wire [NUM_OF_CHANNELS-1:0] enable_s;
-    assign enable_s = {enable_3, enable_2, enable_1, enable_0};
+    // FIFO read signals
+    wire fifo_rd_rst_busy;
+    wire fifo_rd_empty;
+    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_rd_data;
+    wire fifo_rd_en;
 
-    // Enable count signal
-    wire [$clog2(NUM_OF_CHANNELS+1)-1:0] enable_count_s;
+    // ADC -> DMA FIFO
+    xpm_fifo_async #(
+        .FIFO_MEMORY_TYPE("block"),
+        .FIFO_READ_LATENCY(0), // No output register stages, required for FWFT
+        .FIFO_WRITE_DEPTH(16), // FIFO depth is 16 entries (xpm minimum)
+        .READ_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1), // Channel data + sync
+        .READ_MODE("fwft"), // First word fall though, such that first data is presented on output before empty is cleared
+        .SIM_ASSERT_CHK(1), // Enable simulation messages - report misuse
+        .USE_ADV_FEATURES("0000"), // Disable all advanced features
+        .WRITE_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1) // Channel data + sync
+    )
+    fifo (
+        .wr_clk(adc_clk),
+        .rst('b0), // Unused reset input, syncronous to wr_clk
+        .wr_rst_busy(fifo_wr_rst_busy), // If high wr_en should not be asserted
+        .wr_en(fifo_wr_en),
+        .din(fifo_wr_data),
+        .full(fifo_wr_full),
 
-    // Register for current enabled signal count
-    reg [$clog2(NUM_OF_CHANNELS+1)-1:0] enable_count = 'h0;
-
-    // Count enable bits which are set
-    count_bits #(
-        .BITS_WIDTH (NUM_OF_CHANNELS)
-    ) count_bits_impl (
-        .bits(enable_s),
-        .count(enable_count_s)
+        .rd_clk(dma_clk),
+        .rd_rst_busy(fifo_rd_rst_busy), // If high rd_en should not be asserted
+        .empty(fifo_rd_empty),
+        .rd_en(fifo_rd_en),
+        .dout(fifo_rd_data),
+        
+        .sleep('b0)
     );
 
-    // Enable index signals
-    wire [$clog2(NUM_OF_CHANNELS)-1:0] enable_indexes_s [0:NUM_OF_CHANNELS-1];
+    // Calculate when a fifo write is possible, aka fifo isn't busy and isn't full
+    wire fifo_wr_possible;
+    assign fifo_wr_possible = !fifo_wr_rst_busy && !fifo_wr_full;
 
-    // Array of registers for enabled indexes
-    reg [$clog2(NUM_OF_CHANNELS)-1:0] enable_indexes [0:NUM_OF_CHANNELS-1];
+    // Calculate when a fifo read is possible
+    wire fifo_rd_possible;
+    assign fifo_rd_possible = !fifo_rd_rst_busy && !fifo_rd_empty;
 
-    // Convert enable signal into index array
-    bits_to_indexes bits_to_indexes_impl (
-        .bits(enable_s),
-        .index_0(enable_indexes_s[0]),
-        .index_1(enable_indexes_s[1]),
-        .index_2(enable_indexes_s[2]),
-        .index_3(enable_indexes_s[3])
-    );
+    // Combine write data
+    assign fifo_wr_data = {packed_fifo_wr_sync, packed_fifo_wr_data};
 
-    // Number of enabled channels changed
-    reg enables_changed = 'b0;
+    // Calculate fifo write enable - write if space available and data is valid
+    assign fifo_wr_en = fifo_wr_possible && packed_fifo_wr_en;
 
-    // Update enable count and index registers, track changes in enable count
-    always @(posedge clk) begin : enable_count_index_change
-        integer i;
-
-        if (reset == 'b1) begin
-            // Reset enable count
-            enable_count <= 0;
-
-            // Reset enable indexes
-            for (i = 0; i < NUM_OF_CHANNELS; i = i + 1)
-                enable_indexes[i] <= 'h0;
-
-            // Clear changed flag
-            enables_changed <= 'b0;
-        end else begin
-            // Update enable count
-            enable_count <= enable_count_s;
-
-            // Update indexes
-            for (i = 0; i < NUM_OF_CHANNELS; i = i + 1)
-                enable_indexes[i] <= enable_indexes_s[i];
-
-            // Update changed flag
-            enables_changed <= (enable_count_s != enable_count);
-        end
-    end
-
-    // Channel packer inputs
-    reg [SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] cp_data_in [0:3];
-
-    // Mux module inputs to packer inputs based on enable indexes
-    always @(*) begin : input_mux 
-        integer i;
-
-        for (i = 0; i < NUM_OF_CHANNELS; i = i + 1)
-            case (enable_indexes[i])
-                0: cp_data_in[i] = fifo_wr_data_0;
-                1: cp_data_in[i] = fifo_wr_data_1;
-                2: cp_data_in[i] = fifo_wr_data_2;
-                3: cp_data_in[i] = fifo_wr_data_3;
-                default: cp_data_in[i] = 'h0;
-            endcase
-    end
-
-    // Channel packer outputs
-    wire cp_data_out_sync;
-    wire cp_data_out_valid;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] cp_data_out;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] cp_timestamp_out;
-
-    // Channel packer reset (need to reset packer on external reset, or change in number of channels enabled)
-    wire cp_reset;
-    assign cp_reset = (reset || enables_changed);
-
-    // Channel packer
-    packer #( 
-        .NUM_OF_CHANNELS (NUM_OF_CHANNELS),
-        .CHANNEL_WIDTH (SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL)
-    ) packer (
-        .clk(clk),
-        .reset(cp_reset),
-        .timestamp_in(timestamp),
-        .enabled_chan_count(enable_count),
-        .en(fifo_wr_en),
-        .data_in_0(cp_data_in[0]),
-        .data_in_1(cp_data_in[1]),
-        .data_in_2(cp_data_in[2]),
-        .data_in_3(cp_data_in[3]),
-        .data_out_sync(cp_data_out_sync),
-        .data_out_valid(cp_data_out_valid),
-        .data_out(cp_data_out),
-        .timestamp_out(cp_timestamp_out)
-    );
+    // Split read data
+    wire fifo_data_sync_dma;
+    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_data_dma;
+    assign fifo_data_sync_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
+    assign fifo_data_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0];
 
     // Timestamp block counter, incremented on each output from packer
     // Reset when reaches or exceeds timestamp_every input
@@ -168,141 +107,93 @@ module util_cpack2_timestamp #(
     wire timestamp_en;
     assign timestamp_en = (timestamp_every != 0);
     wire timestamp_req;
-    assign timestamp_req = (timestamp_counter == 0);
+    assign timestamp_req = (timestamp_counter == 0);  
 
     // Manage timestamp counter
-    always @(posedge clk) begin
-        if (reset || !timestamp_en) begin
-            // Reset sample counter
+    always @(posedge dma_clk) begin
+        if (!timestamp_en) begin
+            // Timestamping disabled, reset timestamp counter
             timestamp_counter <= 0;
 
-        end else if (cp_data_out_valid) begin
-            // Sample arrived, increment counter
-            if (timestamp_counter >= (timestamp_every - 1)) begin
-                // Reset count
+        end else if (fifo_rd_possible) begin
+            // Timestamp counter enabled and data should be read, count sample
+            if (timestamp_counter >= timestamp_every) begin
+                // Reset counter
                 timestamp_counter <= 0;
     
             end else begin
-                // Count sample
+                // Increment counter
                 timestamp_counter <= timestamp_counter + 1;
             end
         end
     end
 
-    // Write and sync strobes
-    reg write_sync_strobe = 'b0;
-    reg write_strobe = 'b0;
-    reg [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] write_data [0:2];
-    initial begin
-        write_data[0] = 'h0;
-        write_data[1] = 'h0;
-        write_data[2] = 'h0;
+    // Calculate fifo read signal, read when possible and timestamp not enabled or not being output
+    assign fifo_rd_en = fifo_rd_possible && (!timestamp_en || !timestamp_req);
+
+    // FIFO output registers
+    reg packed_timestamped_fifo_wr_en_reg = 'b0;
+    reg packed_timestamped_fifo_wr_sync_reg = 'b0;
+    reg [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] packed_timestamped_fifo_wr_data_reg = 'h0;
+
+    // Manage FIFO read
+    always @(posedge dma_clk) begin
+        // Assume output write en, sync and data reset
+        packed_timestamped_fifo_wr_en_reg <= 'b0;
+        packed_timestamped_fifo_wr_sync_reg <= 'b0;
+        packed_timestamped_fifo_wr_data_reg <= 'h0;
+
+        if (fifo_rd_possible) begin
+            // FIFO read possible, in fwft mode so data is waiting on output
+            if (timestamp_en && timestamp_req) begin
+                // Timestamping enabled and required, output timestamp
+                packed_timestamped_fifo_wr_data_reg <= timestamp;
+                packed_timestamped_fifo_wr_sync_reg <= fifo_data_sync_dma; // Report sync on timestamp + input in sync
+                packed_timestamped_fifo_wr_en_reg <= 'b1;
+
+            end else begin
+                // Timestamping disabled or not required, output data
+                packed_timestamped_fifo_wr_data_reg <= fifo_data_dma;
+                packed_timestamped_fifo_wr_sync_reg <= timestamp_en ? 'b0 : fifo_data_sync_dma; // Output sync signal if timestamp disabled
+                packed_timestamped_fifo_wr_en_reg <= 'b1;
+            end
+        end
     end
 
-    // Define state machine states
-    localparam STATE_INDEX_0 = 0;
-    localparam STATE_INDEX_1 = 1;
-    localparam STATE_OVERFLOW = 2;
-    localparam STATE_MAX = 3;
+    // Assign FIFO outputs
+    assign packed_timestamped_fifo_wr_en = packed_timestamped_fifo_wr_en_reg;
+    assign packed_timestamped_fifo_wr_sync = packed_timestamped_fifo_wr_sync_reg;
+    assign packed_timestamped_fifo_wr_data = packed_timestamped_fifo_wr_data_reg;
 
-    // State register
-    reg [$clog2(STATE_MAX)-1:0] state = STATE_INDEX_0;
+    // Module can't suffer from overflows itself, so pass downstream flag up, crossing clock domains
+    wire overflow_sync_ready;
+    reg delayed_packed_timestamped_fifo_wr_overflow_reg = 'b0;
+    wire curr_or_delayed_packed_timestamped_fifo_wr_overflow;
+    assign curr_or_delayed_packed_timestamped_fifo_wr_overflow = packed_timestamped_fifo_wr_overflow || delayed_packed_timestamped_fifo_wr_overflow_reg;
 
-    // Output register state machine
-    always @(posedge clk) begin
-        if (reset) begin
-            // Reset state
-            state <= STATE_INDEX_0;
+    cdc_sync_data_closed #( 
+        .NUM_BITS (1)
+    ) overflow_sync (
+        .clk_in(dma_clk),
+        .clk_out(adc_clk),
+        .ready(overflow_sync_ready),
+        .enable('b1),
+        .bits_in(curr_or_delayed_packed_timestamped_fifo_wr_overflow),
+        .bits_out(packed_fifo_wr_overflow)
+    );
 
-            // Clear write and sync strobes
-            write_strobe <= 'b0;
-            write_sync_strobe <= 'b0; 
+    // Ensure overflows occuring while the syncronizer is busy are reported
+    always @(posedge dma_clk) begin
+        if (overflow_sync_ready) begin
+            // Reset delayed value
+            delayed_packed_timestamped_fifo_wr_overflow_reg <= 'b0;
 
         end else begin
-            // Assume write will be reset
-            write_strobe <= 'b0;
-    
-            // Check for write signal from packer
-            if (cp_data_out_valid == 'b1) begin           
-                // Packer has data, act on state
-                case (state)
-                    STATE_INDEX_0: begin
-                        // Empty buffer, expect data word to be stored and state changed
-                        write_data[0] <= cp_data_out;
-                        state <= STATE_INDEX_1;
-        
-                        // Is timestamping enabled and timestamp required?
-                        if (timestamp_en && timestamp_req) begin
-                            // Yes, output both timestamp and data
-                            write_data[0] <= cp_timestamp_out;
-                            write_data[1] <= cp_data_out;
-                            write_strobe <= 'b1;
-        
-                            // Stay in this state as we're outputting two words
-                            state <= STATE_INDEX_0;
-                        end
-        
-                        // Is timestamping enabled?
-                        if (timestamp_en == 'b1) begin
-                            // Yes, sync strobe follows timestamp request with channel 0 in LSB
-                            write_sync_strobe <= (cp_data_out_sync && timestamp_req);
-                            
-                        end else begin
-                            // No, sync strobe will follow packer sync - i.e. sync will be indicated if channel 0 is in LSB
-                            write_sync_strobe <= cp_data_out_sync;
-                        end                    
-                    end
-                    STATE_INDEX_1: begin
-                        // One word buffered already, expect another to be added before both output
-                        write_data[1] <= cp_data_out;
-                        write_strobe <= 'b1;
-                        state <= STATE_INDEX_0;
-        
-                        // Is timestamping enabled and timestamp required?
-                        if (timestamp_en && timestamp_req) begin
-                            // Yes, oh dear, output stored word and timestamp. Storing current data as overflow
-                            write_data[1] <= cp_timestamp_out;
-                            write_data[2] <= cp_data_out;
-        
-                            // Advance to overflow state
-                            state <= STATE_OVERFLOW;
-                        end                  
-                    end
-                    STATE_OVERFLOW: begin
-                        // What a mess, we have a leftover word from last time and a new word from this transfer, expect to return to empty buffer
-                        write_data[0] <= write_data[2];
-                        write_data[1] <= cp_data_out;
-                        write_strobe <= 'b1;
-                        state <= STATE_INDEX_0;
-    
-                        // Is timestamping enabled and timestamp required?
-                        if (timestamp_en && timestamp_req) begin
-                            // Yes, oh geez, it happened again (someone must have changed the enables).
-                            // Output stored word and timestamp. Storing current data as overflow
-                            write_data[1] <= cp_timestamp_out;
-                            write_data[2] <= cp_data_out;
-        
-                            // Hold in overflow state
-                            state <= STATE_OVERFLOW;
-                        end  
-    
-                        // Ensure sync strobe cleared (we might be in sync, but the user can probably wait a sample or two here)
-                        write_sync_strobe <= 'b0;
-                    end
-                    default: begin
-                        // Return to index 0
-                        state <= STATE_INDEX_0;
-                    end
-                endcase
-            end
-        end     
+            // Check for overflow while sycnronizer busy
+            if (packed_timestamped_fifo_wr_overflow) begin
+                // Hold delayed value such that it will be reported when the syncronizer is ready again
+                delayed_packed_timestamped_fifo_wr_overflow_reg <= 'b1;
+            end           
+        end
     end
-
-    // Assign fifo outputs
-    assign packed_fifo_wr_en = write_strobe;
-    assign packed_fifo_wr_sync = write_sync_strobe;
-    assign packed_fifo_wr_data = {write_data[1], write_data[0]};
-
-    // Module can't suffer from overflows itself, so pass downstream flag up
-    assign fifo_wr_overflow = packed_fifo_wr_overflow;
 endmodule
