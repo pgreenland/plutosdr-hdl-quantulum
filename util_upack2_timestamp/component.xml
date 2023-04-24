@@ -52,6 +52,12 @@
           </spirit:physicalPort>
         </spirit:portMap>
       </spirit:portMaps>
+      <spirit:parameters>
+        <spirit:parameter>
+          <spirit:name>POLARITY</spirit:name>
+          <spirit:value spirit:id="BUSIFPARAM_VALUE.RESET_UPACK.POLARITY">ACTIVE_HIGH</spirit:value>
+        </spirit:parameter>
+      </spirit:parameters>
     </spirit:busInterface>
     <spirit:busInterface>
       <spirit:name>dac_clk</spirit:name>
@@ -100,6 +106,12 @@
           </spirit:physicalPort>
         </spirit:portMap>
       </spirit:portMaps>
+      <spirit:parameters>
+        <spirit:parameter>
+          <spirit:name>POLARITY</spirit:name>
+          <spirit:value spirit:id="BUSIFPARAM_VALUE.RESET.POLARITY">ACTIVE_HIGH</spirit:value>
+        </spirit:parameter>
+      </spirit:parameters>
     </spirit:busInterface>
     <spirit:busInterface>
       <spirit:name>m_axis</spirit:name>
@@ -158,7 +170,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b6ebe47b</spirit:value>
+            <spirit:value>a37a9130</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -174,7 +186,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b6ebe47b</spirit:value>
+            <spirit:value>a37a9130</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -196,14 +208,14 @@
         <spirit:name>xilinx_testbench</spirit:name>
         <spirit:displayName>Test Bench</spirit:displayName>
         <spirit:envIdentifier>:vivado.xilinx.com:simulation.testbench</spirit:envIdentifier>
-        <spirit:modelName>bits_to_indexes</spirit:modelName>
+        <spirit:modelName>util_upack2_timestamp_tb</spirit:modelName>
         <spirit:fileSetRef>
           <spirit:localName>xilinx_testbench_view_fileset</spirit:localName>
         </spirit:fileSetRef>
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>44d3e445</spirit:value>
+            <spirit:value>7dfa9df8</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -419,7 +431,7 @@
       <spirit:file>
         <spirit:name>src/util_upack2_timestamp.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_b6ebe47b</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_a37a9130</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
@@ -441,17 +453,16 @@
     <spirit:fileSet>
       <spirit:name>xilinx_testbench_view_fileset</spirit:name>
       <spirit:file>
+        <spirit:name>src/util_upack2_timestamp_tb.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+        <spirit:userFileType>USED_IN_simulation</spirit:userFileType>
+        <spirit:userFileType>USED_IN_testbench</spirit:userFileType>
+      </spirit:file>
+      <spirit:file>
         <spirit:name>src/util_upack2_timestamp_tv_vectors.mem</spirit:name>
         <spirit:userFileType>mem</spirit:userFileType>
         <spirit:userFileType>USED_IN_simulation</spirit:userFileType>
-        <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
-      </spirit:file>
-      <spirit:file>
-        <spirit:name>src/util_upack2_timestamp_tb.v</spirit:name>
-        <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:userFileType>USED_IN_simulation</spirit:userFileType>
-        <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
+        <spirit:userFileType>USED_IN_testbench</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
   </spirit:fileSets>
@@ -501,15 +512,15 @@
       <xilinx:vendorDisplayName>Quantulum Ltd</xilinx:vendorDisplayName>
       <xilinx:vendorURL>https://www.quantulum.co.uk</xilinx:vendorURL>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2023-04-22T21:29:44Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2023-04-24T21:23:49Z</xilinx:coreCreationDateTime>
       <xilinx:tags>
       </xilinx:tags>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.2</xilinx:xilinxVersion>
-      <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="58918ad1"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="6630c541"/>
-      <xilinx:checksum xilinx:scope="ports" xilinx:value="bbcee1a4"/>
+      <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="5e3ca72b"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="a402dfe9"/>
+      <xilinx:checksum xilinx:scope="ports" xilinx:value="4245e3ba"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="aa511e64"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="164e8b2f"/>
     </xilinx:packagingInfo>
