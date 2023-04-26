@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module util_upack2_timestamp_tb;
-    reg clk;
+    reg dma_clk;
+    reg dac_clk;
     reg reset;
     wire reset_upack;
     reg [63:0] timestamp;
@@ -19,8 +20,8 @@ module util_upack2_timestamp_tb;
         .SAMPLE_DATA_WIDTH (16),
         .SAMPLES_PER_CHANNEL (1)
     ) uut (
-        .dma_clk(clk),
-        .dac_clk(clk),
+        .dma_clk(dma_clk),
+        .dac_clk(dac_clk),
         .reset(reset),
         .reset_upack(reset_upack),
         .timestamp(timestamp),
@@ -35,11 +36,20 @@ module util_upack2_timestamp_tb;
     );
 
     always begin
-        // Toggle clock
-        #1 clk = ~clk;
+        // Toggle DMA clock
+        #1 dma_clk = ~dma_clk;
     end
 
-    always @(posedge clk) begin
+    always begin
+        // Delay to align rising edges of clocks
+        #1;
+        
+        // Toggle DAC clock at 1/4 rate of DMA clock (providing some space clock cycles in insert timestamps)
+        while (1)
+            #4 dac_clk = ~dac_clk;
+    end
+
+    always @(posedge dac_clk) begin
         // Increment timestamp
         timestamp <= timestamp + 1;
     end 
@@ -50,7 +60,7 @@ module util_upack2_timestamp_tb;
     reg mode = MODE_READ_VECTORS;
 
     // Test vector - unpack reset + data bits
-    reg [64:0] expected_outputs [0:35];
+    reg [64:0] expected_outputs [0:56];
 
     integer i, j;
     reg ts_req;
@@ -61,7 +71,8 @@ module util_upack2_timestamp_tb;
             $readmemb("util_upack2_timestamp_tv_vectors.mem", expected_outputs);
 
         // Reset signals
-        clk = 'b0;
+        dma_clk = 'b0;
+        dac_clk = 'b0;
         reset = 'b1;
         timestamp = 'h0;
         timestamp_every = 'h0;
@@ -70,7 +81,7 @@ module util_upack2_timestamp_tb;
         s_axis_data = 'h0;
 
         // De-assert reset
-        @(posedge clk)
+        @(posedge dac_clk)
         reset <= 1'b0;
 
         // Wait for FIFO to come out of reset
@@ -79,8 +90,8 @@ module util_upack2_timestamp_tb;
         // Reset sample counter
         j = 0;
 
-        // Perform test with timestamping disabled, enabled and late, enabled and on time, enabled and early
-        for (i = 0; i < 4; i = i + 1) begin
+        // Perform test with timestamping disabled, enabled and late, enabled and on time, enabled and early, enabled and very early (making DAC domain wait)
+        for (i = 0; i < 5; i = i + 1) begin
             // Set mode
             if (i == 0) begin
                 // Timestamping disabled
@@ -91,25 +102,27 @@ module util_upack2_timestamp_tb;
             end
 
             // Assert transfer request
-            @(posedge clk)
+            @(posedge dma_clk)
             s_axis_xfer_req <= 'b1;
 
             // Iterate through test values
             ts_req = 'b1;
             while (j < ((i + 1) * 48)) begin          
                 // Provide data on first step, or if ready asserted
-                @(posedge clk)
+                @(posedge dma_clk)
                 if (!s_axis_valid || s_axis_ready) begin
                     // Insert timestamp every x blocks
                     if (timestamp_every != 0 && ((j / 4) % timestamp_every == 0) && ts_req) begin
                         // Provide timestamp
                         case (i)
                             // Timestamp late
-                            1: s_axis_data[63:0] <= timestamp;
+                            1: s_axis_data[63:0] <= timestamp - 2;
                             // Timestamp on time
                             2: s_axis_data[63:0] <= timestamp + 1;
                             // Timestamp early
                             3: s_axis_data[63:0] <= timestamp + 2;
+                            // Timestamp very early
+                            4: s_axis_data[63:0] <= timestamp + 20;
                         endcase
 
                         // Assert data valid
@@ -135,7 +148,7 @@ module util_upack2_timestamp_tb;
             end
            
             // Wait for final value to be consumed
-            @(posedge clk)
+            @(posedge dma_clk)
             while (!s_axis_ready) begin
                 #2;       
             end
@@ -150,7 +163,7 @@ module util_upack2_timestamp_tb;
         end
 
         // Wait for reads to complete
-        #32;
+        #160;
 
         // Write captured expected vectors out to file
         if (mode == MODE_WRITE_VECTORS)
@@ -165,7 +178,7 @@ module util_upack2_timestamp_tb;
    
     // Wait for valid signal and print data
     integer expected_index = 0;
-    always @(posedge clk) begin
+    always @(posedge dac_clk) begin
         if (reset_upack) begin
             $display("Output: Reset");
         end

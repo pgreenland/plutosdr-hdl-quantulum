@@ -18,7 +18,7 @@ module util_upack2_timestamp #(
     // Will be asserted if reset above is, or a new DMA transfer starts
     output reset_upack,
 
-    // Timestamp to compare against data stream every timestamp_every blocks, in DMA clock domain
+    // Timestamp to compare against data stream every timestamp_every blocks, in DAC clock domain
     input [63:0] timestamp,
 
     /*
@@ -48,13 +48,13 @@ module util_upack2_timestamp #(
     // FIFO write signals
     wire fifo_wr_rst_busy;
     wire fifo_wr_full;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_wr_data;
+    wire [(1 + 1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))-1:0] fifo_wr_data;
     wire fifo_wr_en;
 
     // FIFO read signals
     wire fifo_rd_rst_busy;
     wire fifo_rd_empty;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_rd_data;
+    wire [(1 + 1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))-1:0] fifo_rd_data;
     wire fifo_rd_en;
 
     // DMA -> DAC FIFO
@@ -62,11 +62,11 @@ module util_upack2_timestamp #(
         .FIFO_MEMORY_TYPE("block"),
         .FIFO_READ_LATENCY(0), // No output register stages, required for FWFT
         .FIFO_WRITE_DEPTH(16), // FIFO depth is 16 entries (xpm minimum)
-        .READ_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1), // Channel data + xfer_start
+        .READ_DATA_WIDTH((1 + 1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))), // xfer_start + timestamp valid + timestamp + data
         .READ_MODE("fwft"), // First word fall though, such that first data is presented on output before empty is cleared
         .SIM_ASSERT_CHK(1), // Enable simulation messages - report misuse
         .USE_ADV_FEATURES("0000"), // Disable all advanced features
-        .WRITE_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1) // Channel data + xfer_start
+        .WRITE_DATA_WIDTH((1 + 1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))) // xfer_start + timestamp valid + timestamp + data
     )
     fifo (
         .wr_clk(dma_clk),
@@ -113,15 +113,62 @@ module util_upack2_timestamp #(
     // A transfer has started on rising edge of xfer_req signal
     assign transfer_start_dma = (s_axis_xfer_req && !last_s_axis_xfer_req) || held_transfer_start_dma;
 
+    // Timestamp and valid flag
+    reg [63:0] last_timestamp = 'h0;
+    reg timestamp_valid = 'b0;
+
     // Combine write data
-    assign fifo_wr_data = {transfer_start_dma, s_axis_data};
+    assign fifo_wr_data = {transfer_start_dma, timestamp_valid, last_timestamp, s_axis_data};
 
     // Split read data
     wire transfer_start_dac;
-    assign transfer_start_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
-    assign m_axis_data = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0];
+    wire timestamp_valid_dac;
+    wire [63:0] timestamp_dac;
+    assign transfer_start_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL + 64 + 1];
+    assign timestamp_valid_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL + 64 + 0];
+    assign timestamp_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL +: 64];
+    assign m_axis_data = fifo_rd_data[0 +: NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
 
-    // Timestamp block counter, incremented on each output from packer
+    // Cross clock domain with timestamp
+    wire [63:0] timestamp_dac_grey;
+    wire [63:0] timestamp_dma_grey;
+    wire [63:0] timestamp_dma_temp;
+    reg [63:0] timestamp_dma = 'h0;
+
+    // Convert binary timestamp in DAC domain into grey code
+    binary_to_grey #(
+        .WIDTH(64)
+    )
+    timestamp_binary_to_grey (
+        .in_binary(timestamp),
+        .out_grey(timestamp_dac_grey)
+    );
+
+    // Syncronize grey code counter from DAC to DMA clock domains
+    cdc_sync_bits #(
+        .NUM_BITS(64)
+    ) sync_grey_timestamp_dac_to_dma (
+        .clk_out(dma_clk),
+        .reset('b0),
+        .bits_in(timestamp_dac_grey),
+        .bits_out(timestamp_dma_grey)
+    );
+
+    // Convert grey code timestamp in DMA clock domain into binary
+    grey_to_binary #(
+        .WIDTH(64)
+    )
+    timestamp_grey_to_binary (
+        .in_grey(timestamp_dma_grey),
+        .out_binary(timestamp_dma_temp)
+    );
+
+    // Register timetamp in DMA clock domain (hoping the large XOR chain in the grey code to binary conversion meets timing)
+    always @(posedge dma_clk) begin
+        timestamp_dma <= timestamp_dma_temp;
+    end
+
+    // Timestamp block counter, incremented on each input
     // Reset when reaches or exceeds timestamp_every input
     reg [31:0] timestamp_counter = 'h0;
 
@@ -142,7 +189,7 @@ module util_upack2_timestamp #(
             if (timestamp_counter >= timestamp_every) begin
                 // Reset counter
                 timestamp_counter <= 0;
-    
+
             end else begin
                 // Increment counter
                 timestamp_counter <= timestamp_counter + 1;
@@ -164,14 +211,14 @@ module util_upack2_timestamp #(
     //      Timestamping is disabled and a FIFO write is possible
     //      Timestamping is enabled, a timestamp check isn't required and a FIFO write is possible
     //      Timestamping is enabled, a timestamp check is required and the timestamp is late
-    //      Timestamping is enabled, a timestamp check is required, a FIFO write is possible and the timestamp is on time
+    //      Timestamping is enabled, a timestamp check is required, a FIFO write is possible and the timestamp is on time or early
     assign s_axis_ready = s_axis_valid && (    discard_data_reg
                                             || (!timestamp_en && fifo_wr_possible)
                                             || (timestamp_en && !timestamp_req && fifo_wr_possible)
-                                            || (timestamp_en && timestamp_req && (s_axis_data_timestamp < timestamp))
-                                            || (timestamp_en && timestamp_req && fifo_wr_possible && (s_axis_data_timestamp == timestamp))
+                                            || (timestamp_en && timestamp_req && (s_axis_data_timestamp < timestamp_dma))
+                                            || (timestamp_en && timestamp_req && fifo_wr_possible && (s_axis_data_timestamp >= timestamp_dma))
                                           );
-   
+
     // Manage discard data signal
     always @(posedge dma_clk) begin
         if (!s_axis_xfer_req) begin
@@ -182,10 +229,33 @@ module util_upack2_timestamp #(
             if (s_axis_valid && s_axis_ready && timestamp_req) begin
                 // Data is valid and read is being requested. Timestamp check required.
                 // Update discard flag, discarding samples if timestamping is enabled and timestamp is late
-                discard_data_reg <= timestamp_en && (s_axis_data_timestamp < timestamp);
+                discard_data_reg <= timestamp_en && (s_axis_data_timestamp < timestamp_dma);
             end
         end     
     end
+
+    // Manage last timestamp and last timestamp valid flag
+    // This value and its flag get carried across in the fifo to the DAC clock domain, allowing it to hold the first sample in a block
+    // before the transmission timestamp is reached
+    always @(posedge dma_clk) begin
+        if (!s_axis_xfer_req) begin
+            // Reset timestamp and valid flag
+            last_timestamp <= 'h0;
+            timestamp_valid <= 'b0;
+
+        end else begin     
+            if (s_axis_valid && s_axis_ready && timestamp_en && timestamp_req) begin
+                // Data is valid and read is being requested. Timestamp enabled and check required (therefore timestamp present).
+                // Capture timestamp and set valid flag
+                last_timestamp <= s_axis_data_timestamp;
+                timestamp_valid <= 'b1;
+            end else begin
+                // Data invalid, not ready for more data or no timestamp required yet, reset register and clear flag
+                last_timestamp <= 'h0;
+                timestamp_valid <= 'b0;
+            end
+        end
+    end 
 
     // Calculate fifo write enable - write if space available, data is valid, shouldn't be discarded and timestamping is enabled or not required
     assign fifo_wr_en = fifo_wr_possible && s_axis_valid && s_axis_ready && !discard_data_reg && (!timestamp_en || !timestamp_req);
@@ -218,8 +288,8 @@ module util_upack2_timestamp #(
     // Calculate fifo read enable. Perform read when a read is possible, downstream device is ready and downstream device isn't being reset
     assign fifo_rd_en = fifo_rd_possible && m_axis_ready && !transfer_start_rising_stretched_dac;
 
-    // Calculate valid - supressing it if the downstream module is being reset
-    assign m_axis_valid = fifo_rd_possible && !transfer_start_rising_stretched_dac;
+    // Calculate valid - supressing it if the downstream module is being reset or timestamp not yet reached
+    assign m_axis_valid = fifo_rd_possible && !transfer_start_rising_stretched_dac && (!timestamp_valid_dac || (timestamp_dac <= timestamp));
 
     // Assign reset signal, passing ADC module reset through along with reset due to transfer start
     assign reset_upack = reset || transfer_start_rising_stretched_dac;

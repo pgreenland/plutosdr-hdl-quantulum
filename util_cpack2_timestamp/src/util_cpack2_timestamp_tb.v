@@ -37,7 +37,7 @@ module util_cpack2_timestamp_tb;
         // Delay to align rising edges of clocks
         #1;
         
-        // Toggle ADC clock at 1/4 rate of DAC clock (providing some space clock cycles in insert timestamps)
+        // Toggle ADC clock at 1/4 rate of DMA clock (providing some space clock cycles in insert timestamps)
         while (1)
             #4 adc_clk = ~adc_clk;
     end
@@ -47,8 +47,8 @@ module util_cpack2_timestamp_tb;
         #1 dma_clk = ~dma_clk;
     end
 
-    always @(posedge dma_clk) begin
-        // Increment timestamp on every clock cycle
+    always @(posedge adc_clk) begin
+        // Increment timestamp on every ADC clock cycle
         timestamp = timestamp + 1;
     end   
 

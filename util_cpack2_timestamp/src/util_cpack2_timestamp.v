@@ -11,7 +11,7 @@ module util_cpack2_timestamp #(
     // DMA clock
     input dma_clk,
 
-    // Timestamp to stamp data stream with every timestamp_every blocks, in DMA clock domain
+    // Timestamp to stamp data stream with every timestamp_every blocks, in ADC clock domain
     input [63:0] timestamp,
 
     /*
@@ -42,13 +42,13 @@ module util_cpack2_timestamp #(
     // FIFO write signals
     wire fifo_wr_rst_busy;
     wire fifo_wr_full;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_wr_data;
+    wire [(1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))-1:0] fifo_wr_data;
     wire fifo_wr_en;
 
     // FIFO read signals
     wire fifo_rd_rst_busy;
     wire fifo_rd_empty;
-    wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL:0] fifo_rd_data;
+    wire [(1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))-1:0] fifo_rd_data;
     wire fifo_rd_en;
 
     // ADC -> DMA FIFO
@@ -56,11 +56,11 @@ module util_cpack2_timestamp #(
         .FIFO_MEMORY_TYPE("block"),
         .FIFO_READ_LATENCY(0), // No output register stages, required for FWFT
         .FIFO_WRITE_DEPTH(16), // FIFO depth is 16 entries (xpm minimum)
-        .READ_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1), // Channel data + sync
+        .READ_DATA_WIDTH(1+64+NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL), // sync + timestamp + channel data
         .READ_MODE("fwft"), // First word fall though, such that first data is presented on output before empty is cleared
         .SIM_ASSERT_CHK(1), // Enable simulation messages - report misuse
         .USE_ADV_FEATURES("0000"), // Disable all advanced features
-        .WRITE_DATA_WIDTH(NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+1) // Channel data + sync
+        .WRITE_DATA_WIDTH(1+64+NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL) // sync + timestamp + channel data
     )
     fifo (
         .wr_clk(adc_clk),
@@ -87,19 +87,21 @@ module util_cpack2_timestamp #(
     wire fifo_rd_possible;
     assign fifo_rd_possible = !fifo_rd_rst_busy && !fifo_rd_empty;
 
-    // Combine write data
-    assign fifo_wr_data = {packed_fifo_wr_sync, packed_fifo_wr_data};
+    // Combine write data - sync signal + 64-bit timestamp + samples 
+    assign fifo_wr_data = {packed_fifo_wr_sync, timestamp, packed_fifo_wr_data};
 
     // Calculate fifo write enable - write if space available and data is valid
     assign fifo_wr_en = fifo_wr_possible && packed_fifo_wr_en;
 
     // Split read data
+    wire [63:0] fifo_data_timestamp_dma;
     wire fifo_data_sync_dma;
     wire [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] fifo_data_dma;
-    assign fifo_data_sync_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
-    assign fifo_data_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0];
+    assign fifo_data_sync_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL+64];
+    assign fifo_data_timestamp_dma = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL +: 64];
+    assign fifo_data_dma = fifo_rd_data[0 +: NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
 
-    // Timestamp block counter, incremented on each output from packer
+    // Timestamp block counter, incremented on each input
     // Reset when reaches or exceeds timestamp_every input
     reg [31:0] timestamp_counter = 'h0;
 
@@ -147,7 +149,7 @@ module util_cpack2_timestamp #(
             // FIFO read possible, in fwft mode so data is waiting on output
             if (timestamp_en && timestamp_req) begin
                 // Timestamping enabled and required, output timestamp
-                packed_timestamped_fifo_wr_data_reg <= timestamp;
+                packed_timestamped_fifo_wr_data_reg <= fifo_data_timestamp_dma;
                 packed_timestamped_fifo_wr_sync_reg <= fifo_data_sync_dma; // Report sync on timestamp + input in sync
                 packed_timestamped_fifo_wr_en_reg <= 'b1;
 
