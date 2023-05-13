@@ -7,6 +7,8 @@ proc init_gui { IPINST } {
   ipgui::add_param $IPINST -name "NUM_OF_CHANNELS"
   ipgui::add_param $IPINST -name "SAMPLES_PER_CHANNEL"
   ipgui::add_param $IPINST -name "SAMPLE_DATA_WIDTH"
+  ipgui::add_param $IPINST -name "TIMESTAMP_LIMIT_EVERY_MULTIPLE"
+  ipgui::add_param $IPINST -name "TIMESTAMP_SPOT_CHECK_ONLY"
 
 }
 
@@ -37,6 +39,24 @@ proc validate_PARAM_VALUE.SAMPLE_DATA_WIDTH { PARAM_VALUE.SAMPLE_DATA_WIDTH } {
 	return true
 }
 
+proc update_PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE { PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE } {
+	# Procedure called to update TIMESTAMP_LIMIT_EVERY_MULTIPLE when any of the dependent parameters in the arguments change
+}
+
+proc validate_PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE { PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE } {
+	# Procedure called to validate TIMESTAMP_LIMIT_EVERY_MULTIPLE
+	return true
+}
+
+proc update_PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY { PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY } {
+	# Procedure called to update TIMESTAMP_SPOT_CHECK_ONLY when any of the dependent parameters in the arguments change
+}
+
+proc validate_PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY { PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY } {
+	# Procedure called to validate TIMESTAMP_SPOT_CHECK_ONLY
+	return true
+}
+
 
 proc update_MODELPARAM_VALUE.NUM_OF_CHANNELS { MODELPARAM_VALUE.NUM_OF_CHANNELS PARAM_VALUE.NUM_OF_CHANNELS } {
 	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
@@ -51,5 +71,15 @@ proc update_MODELPARAM_VALUE.SAMPLES_PER_CHANNEL { MODELPARAM_VALUE.SAMPLES_PER_
 proc update_MODELPARAM_VALUE.SAMPLE_DATA_WIDTH { MODELPARAM_VALUE.SAMPLE_DATA_WIDTH PARAM_VALUE.SAMPLE_DATA_WIDTH } {
 	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
 	set_property value [get_property value ${PARAM_VALUE.SAMPLE_DATA_WIDTH}] ${MODELPARAM_VALUE.SAMPLE_DATA_WIDTH}
+}
+
+proc update_MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE { MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE } {
+	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
+	set_property value [get_property value ${PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE}] ${MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE}
+}
+
+proc update_MODELPARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY { MODELPARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY } {
+	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
+	set_property value [get_property value ${PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY}] ${MODELPARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY}
 }
 

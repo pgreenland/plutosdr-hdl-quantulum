@@ -3,7 +3,13 @@
 module util_upack2_timestamp #(
   parameter NUM_OF_CHANNELS = 4,
   parameter SAMPLES_PER_CHANNEL = 1,
-  parameter SAMPLE_DATA_WIDTH = 16
+  parameter SAMPLE_DATA_WIDTH = 16,
+  // Limit of how far a timestamp can be in the future as a multiple of timestamp_every (make it a power of two) 
+  parameter TIMESTAMP_LIMIT_EVERY_MULTIPLE = 16,
+  // Perform spot checks on timestamp rather than continuous checks
+  // Normally the module tracks timestamps betweeen blocks based on enabled channels, allowing is to discard late samples within a block  
+  // In spot check mode a single check will be performed at the start of a block, if its late the whole block will be discarded, else the whole block will be accepted  
+  parameter TIMESTAMP_SPOT_CHECK_ONLY = 0
 ) (
     // DMA clock
     input dma_clk,
@@ -42,7 +48,7 @@ module util_upack2_timestamp #(
 
     // Stream input, in DMA clock domain
     input s_axis_valid, // When high s_axis_data contains valid data
-    output s_axis_ready, // When high module would like next data block to be loaded into s_axis_data
+    output reg s_axis_ready, // When high module would like next data block to be loaded into s_axis_data
     input s_axis_xfer_req, // DMA transfer is in progress
     input [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] s_axis_data,
 
@@ -55,7 +61,7 @@ module util_upack2_timestamp #(
     wire fifo_wr_rst_busy;
     wire fifo_wr_full;
     wire [(1 + 1 + 64 + (NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL))-1:0] fifo_wr_data;
-    wire fifo_wr_en;
+    reg fifo_wr_en;
 
     // FIFO read signals
     wire fifo_rd_rst_busy;
@@ -151,7 +157,7 @@ module util_upack2_timestamp #(
         .count(enable_count_dac)
     );
 
-    // Syncronize count from DAC to DMA clock domains
+    // Synchronize count from DAC to DMA clock domains
     cdc_sync_data_open #(
         .NUM_BITS(3)
     ) sync_enable_line_counter_dac_to_dma (
@@ -165,6 +171,7 @@ module util_upack2_timestamp #(
     // Calculate timestamp step
     always @(*)
     begin
+        // Calculate timestamp increment to count it along 
         case (enable_count_dma)
             // Once channel enabled, each 64-bit sample represents 4 samples
             1: timestamp_step <= 4;
@@ -193,7 +200,7 @@ module util_upack2_timestamp #(
         .out_grey(timestamp_dac_grey)
     );
 
-    // Syncronize grey code counter from DAC to DMA clock domains
+    // Synchronize grey code counter from DAC to DMA clock domains
     cdc_sync_bits #(
         .NUM_BITS(64)
     ) sync_grey_timestamp_dac_to_dma (
@@ -262,18 +269,7 @@ module util_upack2_timestamp #(
     // Calculate if timestamp is too far in the future or late, if not it's good
     wire timestamp_late_or_too_early;
     assign timestamp_late_or_too_early =    (timestamp_to_check < timestamp_dma) // Late
-                                         || (timestamp_to_check > (timestamp_dma + (timestamp_every * 16))); // Arbitrarily too far in the future
-
-    // Assign ready output
-    // Host should continunue sending if the following condition is met:
-    //  Data is valid and:
-    //      Timestamping is disabled and a FIFO write is possible
-    //      Timestamping is enabled, timestamp is late or way too early (too far in the future)
-    //      Timestamping is enabled, a FIFO write is possible and the timestamp is within allowed range (on time or early, but not too early)
-    assign s_axis_ready = s_axis_valid && (    (!timestamp_en && fifo_wr_possible)
-                                            || (timestamp_en && timestamp_late_or_too_early)
-                                            || (timestamp_en && fifo_wr_possible && !timestamp_late_or_too_early)
-                                          );
+                                         || (timestamp_to_check > (timestamp_dma + (timestamp_every * TIMESTAMP_LIMIT_EVERY_MULTIPLE))); // Too early
 
     // Manage tracking timestamp
     always @(posedge dma_clk) begin
@@ -294,6 +290,60 @@ module util_upack2_timestamp #(
                     // Increment tracking timestamp
                     tracking_timestamp_reg <= tracking_timestamp_reg + timestamp_step;
                 end             
+            end
+        end
+    end
+
+    // Timestamp spot check discard register
+    reg timestamp_spot_check_discard = 'b0;
+
+    // Manage timestamp spot check
+    always @(posedge dma_clk) begin
+        if (!s_axis_xfer_req) begin
+            // Reset discard reg
+            timestamp_spot_check_discard <= 'b0;
+
+        end else begin     
+            if (s_axis_valid && s_axis_ready && timestamp_req) begin
+                // Data is valid and read is being requested, timestamp expected, set discard status
+                timestamp_spot_check_discard <= timestamp_late_or_too_early;            
+            end
+        end
+    end
+
+    // Assign ready output
+    always @(*)
+    begin
+        // Assume read will not be asserted
+        s_axis_ready <= 'b0;
+
+        if (s_axis_valid)
+        begin
+            // Data on bus valid
+            if (timestamp_en)
+            begin
+                // Timestamping enabled, consider check mode
+                if (TIMESTAMP_SPOT_CHECK_ONLY)
+                begin
+                    // Spot check mode
+                    // Read if:
+                    //  Discarding data
+                    //  Timestamp has arrived and it's late or too early (will be discarding data)
+                    //  Writing possible and not discarding data
+                    s_axis_ready <=    (timestamp_spot_check_discard)
+                                    || (timestamp_req && timestamp_late_or_too_early)
+                                    || (fifo_wr_possible && !timestamp_spot_check_discard);
+                end else begin
+                    // Continuous check mode
+                    // Read if:
+                    //  Timestamp late or too early
+                    //  Writing possible and timestamp within allowed range
+                    s_axis_ready <=    timestamp_late_or_too_early
+                                    || (fifo_wr_possible && !timestamp_late_or_too_early);
+                end
+            end else begin
+                // Timestamping disabled, read whenever writing possible
+                s_axis_ready <= fifo_wr_possible;
             end
         end
     end
@@ -321,16 +371,36 @@ module util_upack2_timestamp #(
         end
     end 
 
-    // Calculate fifo write enable
-    // Write if:
-    //  Space available
-    //  and data is valid
-    //  and
-    //      timestamping disabled
-    //      or timestamping enabled, no timestamp is being presented and timestamp is valid (early or on time)
-    assign fifo_wr_en =    fifo_wr_possible
-                        && s_axis_valid && s_axis_ready
-                        && (!timestamp_en || (timestamp_en && !timestamp_req && !timestamp_late_or_too_early));
+    // Assign fifo write enable
+    always @(*)
+    begin
+        // Assume FIFO wont be written 
+        fifo_wr_en <= 'b0;
+
+        if (fifo_wr_possible && s_axis_valid && s_axis_ready)
+        begin
+            // FIFO write possible, is timestamping enabled
+            if (timestamp_en)
+            begin
+                // Timestamping enabled, avoid writes when timestamp being received
+                if (!timestamp_req)
+                begin
+                    // Consider check mode
+                    if (TIMESTAMP_SPOT_CHECK_ONLY)
+                    begin
+                        // Spot check mode, write if not discarding data
+                        fifo_wr_en <= !timestamp_spot_check_discard;
+                    end else begin
+                        // Continuous check mode, write if timestamp within allowed range
+                        fifo_wr_en <= !timestamp_late_or_too_early;
+                    end
+                end             
+            end else begin
+               // Timestamping disabled, write whenever possible
+               fifo_wr_en <= 'b1;
+            end
+        end
+    end
 
     // Assert transfer start for single clock cycle if it appears from the FIFO
     reg last_transfer_start_dac = 'b0;

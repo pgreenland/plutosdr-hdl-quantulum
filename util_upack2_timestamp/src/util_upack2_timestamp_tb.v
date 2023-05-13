@@ -18,7 +18,9 @@ module util_upack2_timestamp_tb;
     util_upack2_timestamp #( 
         .NUM_OF_CHANNELS (4),
         .SAMPLE_DATA_WIDTH (16),
-        .SAMPLES_PER_CHANNEL (1)
+        .SAMPLES_PER_CHANNEL (1),
+        .TIMESTAMP_LIMIT_EVERY_MULTIPLE (16),
+        .TIMESTAMP_SPOT_CHECK_ONLY (0)
     ) uut (
         .dma_clk(dma_clk),
         .dac_clk(dac_clk),
