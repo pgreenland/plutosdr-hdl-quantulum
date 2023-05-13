@@ -37,9 +37,9 @@ module util_cpack2_timestamp_tb;
         // Delay to align rising edges of clocks
         #1;
         
-        // Toggle ADC clock at 1/4 rate of DMA clock (providing some space clock cycles in insert timestamps)
+        // Toggle ADC clock at 1/16 rate of DMA clock (providing some space clock cycles in insert timestamps)
         while (1)
-            #4 adc_clk = ~adc_clk;
+            #16 adc_clk = ~adc_clk;
     end
 
     always begin
@@ -58,7 +58,8 @@ module util_cpack2_timestamp_tb;
     reg mode = MODE_READ_VECTORS;
 
     // Test vector - sync bit + data bits
-    reg [64:0] expected_outputs [0:26];
+    localparam EXPECTED_OUTPUT_COUNT = 27;
+    reg [64:0] expected_outputs [0:EXPECTED_OUTPUT_COUNT-1];
 
     integer i, j;
 
@@ -81,7 +82,7 @@ module util_cpack2_timestamp_tb;
         @(posedge adc_clk);
 
         // Wait for FIFO to come out of reset
-        #260;
+        #800;
 
         // Reset sample counter
         j = 0;
@@ -120,7 +121,7 @@ module util_cpack2_timestamp_tb;
             packed_fifo_wr_data <= 'h0;
 
             // Delay to allow final output
-            #28;
+            #64;
         end
 
         // Write captured expected vectors out to file
@@ -132,7 +133,7 @@ module util_cpack2_timestamp_tb;
 
         $finish;
     end
-   
+
     // Wait for the rising edge of enable signal and print data / sync
     integer expected_index = 0;
     always @(posedge dma_clk) begin
@@ -143,12 +144,17 @@ module util_cpack2_timestamp_tb;
             // Compare to expected (or update expected)
             if (mode == MODE_READ_VECTORS) begin
                 // Compare output to expected
-                if (expected_outputs[expected_index] != {packed_timestamped_fifo_wr_sync, packed_timestamped_fifo_wr_data}) begin
-                    $error("Test FAILED, Expected: %h,%b got %h,%b",
+                if (expected_index >= EXPECTED_OUTPUT_COUNT) begin
+                    $error("Test FAILED, Unexpected output data");
+                    $finish;
+                end
+                else if (expected_outputs[expected_index] != {packed_timestamped_fifo_wr_sync, packed_timestamped_fifo_wr_data}) begin
+                    $error("Test FAILED, Expected: %h,%b got %h,%b at index %0d",
                            expected_outputs[expected_index][63:0],
                            expected_outputs[expected_index][64],
                            packed_timestamped_fifo_wr_data,
-                           packed_timestamped_fifo_wr_sync);
+                           packed_timestamped_fifo_wr_sync,
+                           expected_index);
                     $finish;
                 end
             end else begin

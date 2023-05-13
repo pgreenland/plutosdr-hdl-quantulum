@@ -18,6 +18,12 @@ module util_upack2_timestamp #(
     // Will be asserted if reset above is, or a new DMA transfer starts
     output reset_upack,
 
+    // Enable lines - syncrononous to DAC clk
+    input enable_0,
+    input enable_1,
+    input enable_2,
+    input enable_3,
+
     // Timestamp to compare against data stream every timestamp_every blocks, in DAC clock domain
     input [63:0] timestamp,
 
@@ -129,6 +135,49 @@ module util_upack2_timestamp #(
     assign timestamp_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL +: 64];
     assign m_axis_data = fifo_rd_data[0 +: NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
 
+    // Count number of set enable lines, cross clock domain and calculate timestamp step
+    wire [3:0] enables;
+    assign enables = {enable_3, enable_2, enable_1, enable_0}; 
+    wire [2:0] enable_count_dac;
+    wire [2:0] enable_count_dma;
+    reg [2:0] timestamp_step;
+
+    // Count number of bits
+    count_bits #(
+        .BITS_WIDTH(4)
+    )
+    enable_line_counter (
+        .bits(enables),
+        .count(enable_count_dac)
+    );
+
+    // Syncronize count from DAC to DMA clock domains
+    cdc_sync_data_open #(
+        .NUM_BITS(3)
+    ) sync_enable_line_counter_dac_to_dma (
+        .clk_in(dac_clk),
+        .clk_out(dma_clk),
+        .enable('b1),
+        .bits_in(enable_count_dac),
+        .bits_out(enable_count_dma)
+    );
+
+    // Calculate timestamp step
+    always @(*)
+    begin
+        case (enable_count_dma)
+            // Once channel enabled, each 64-bit sample represents 4 samples
+            1: timestamp_step <= 4;
+            // Two channels enabled, each 64-bit sample represents 2 samples
+            2: timestamp_step <= 2;
+            // Four channels enabled, each 64-bit sample represents 1 sample
+            4: timestamp_step <= 1;
+            // No channels enabled, or three channels enabled, freeze timestamp
+            // the effect here will be that if a block arrives late the whole block will be discarded
+            default: timestamp_step <= 0;
+        endcase
+    end
+
     // Cross clock domain with timestamp
     wire [63:0] timestamp_dac_grey;
     wire [63:0] timestamp_dma_grey;
@@ -197,53 +246,56 @@ module util_upack2_timestamp #(
         end
     end
 
-    // Discard data flag, if set data block will be discarded rather than loaded into FIFO
-    reg discard_data_reg = 'b0;
-
     // Convienience extract 64-bit timestamp from input data
     wire [63:0] s_axis_data_timestamp;
     assign s_axis_data_timestamp = s_axis_data[63:0];
 
-    // Calculate if timestamp is way too early, early/ontime or late
-    wire timestamp_too_early;
-    wire timestamp_early_on_time;
-    wire timestamp_late;
-    assign timestamp_too_early = (s_axis_data_timestamp > (timestamp_dma + (timestamp_every * 16))); // Allow timestamp to be upto 16 x timestamp every in the future
-    assign timestamp_early_on_time = (s_axis_data_timestamp >= timestamp_dma);
-    assign timestamp_late = (s_axis_data_timestamp < timestamp_dma);
+    // Tracking timestamp, updated whenever timestamp expected and incremented to track expected timestamp
+    // allows late samples within a block to be discarded
+    reg [63:0] tracking_timestamp_reg = 'h0;
 
-    // Helper signal
+    // Decide which timestamp to use for checks below
+    // Use inbound data when timestamp arriving and tracking register after
+    wire [63:0] timestamp_to_check;
+    assign timestamp_to_check = timestamp_req ? s_axis_data_timestamp : tracking_timestamp_reg;
+
+    // Calculate if timestamp is too far in the future or late, if not it's good
     wire timestamp_late_or_too_early;
-    assign timestamp_late_or_too_early = (timestamp_too_early || timestamp_late);
+    assign timestamp_late_or_too_early =    (timestamp_to_check < timestamp_dma) // Late
+                                         || (timestamp_to_check > (timestamp_dma + (timestamp_every * 16))); // Arbitrarily too far in the future
 
     // Assign ready output
     // Host should continunue sending if the following condition is met:
     //  Data is valid and:
-    //      This block is to be discarded
     //      Timestamping is disabled and a FIFO write is possible
-    //      Timestamping is enabled, a timestamp check isn't required and a FIFO write is possible
-    //      Timestamping is enabled, a timestamp check is required and the timestamp is late or way too early (too far in the future)
-    //      Timestamping is enabled, a timestamp check is required, a FIFO write is possible and the timestamp is within allowed range (on time or early, but not too early)
-    assign s_axis_ready = s_axis_valid && (    discard_data_reg
-                                            || (!timestamp_en && fifo_wr_possible)
-                                            || (timestamp_en && !timestamp_req && fifo_wr_possible)
-                                            || (timestamp_en && timestamp_req && timestamp_late_or_too_early)
-                                            || (timestamp_en && timestamp_req && fifo_wr_possible && timestamp_early_on_time)
+    //      Timestamping is enabled, timestamp is late or way too early (too far in the future)
+    //      Timestamping is enabled, a FIFO write is possible and the timestamp is within allowed range (on time or early, but not too early)
+    assign s_axis_ready = s_axis_valid && (    (!timestamp_en && fifo_wr_possible)
+                                            || (timestamp_en && timestamp_late_or_too_early)
+                                            || (timestamp_en && fifo_wr_possible && !timestamp_late_or_too_early)
                                           );
 
-    // Manage discard data signal
+    // Manage tracking timestamp
     always @(posedge dma_clk) begin
         if (!s_axis_xfer_req) begin
-            // Reset discard flag
-            discard_data_reg <= 'b0;
+            // Reset tracking timestamp
+            tracking_timestamp_reg <= 'h0;
 
         end else begin     
-            if (s_axis_valid && s_axis_ready && timestamp_req) begin
-                // Data is valid and read is being requested. Timestamp check required.
-                // Update discard flag, discarding samples if timestamping is enabled and timestamp is late or way too early (too far in the future)
-                discard_data_reg <= timestamp_en && timestamp_late_or_too_early;
+            if (s_axis_valid && s_axis_ready) begin
+                // Data is valid and read is being requested
+                if (timestamp_req) begin
+                    // Timestamp expected
+                    // Capture timestamp in the hope that if data is being discarded we may be able to catch up
+                    tracking_timestamp_reg <= s_axis_data_timestamp;
+
+                end else begin
+                    // Timestamp not expected                   
+                    // Increment tracking timestamp
+                    tracking_timestamp_reg <= tracking_timestamp_reg + timestamp_step;
+                end             
             end
-        end     
+        end
     end
 
     // Manage last timestamp and last timestamp valid flag
@@ -269,8 +321,16 @@ module util_upack2_timestamp #(
         end
     end 
 
-    // Calculate fifo write enable - write if space available, data is valid, shouldn't be discarded and timestamping is enabled or not required
-    assign fifo_wr_en = fifo_wr_possible && s_axis_valid && s_axis_ready && !discard_data_reg && (!timestamp_en || !timestamp_req);
+    // Calculate fifo write enable
+    // Write if:
+    //  Space available
+    //  and data is valid
+    //  and
+    //      timestamping disabled
+    //      or timestamping enabled, no timestamp is being presented and timestamp is valid (early or on time)
+    assign fifo_wr_en =    fifo_wr_possible
+                        && s_axis_valid && s_axis_ready
+                        && (!timestamp_en || (timestamp_en && !timestamp_req && !timestamp_late_or_too_early));
 
     // Assert transfer start for single clock cycle if it appears from the FIFO
     reg last_transfer_start_dac = 'b0;

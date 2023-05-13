@@ -24,6 +24,10 @@ module util_upack2_timestamp_tb;
         .dac_clk(dac_clk),
         .reset(reset),
         .reset_upack(reset_upack),
+        .enable_3('b1), // Fixed four channels enabled such that timestamp is expected to increase by one for each 64-bit read
+        .enable_2('b1),
+        .enable_1('b1),
+        .enable_0('b1),
         .timestamp(timestamp),
         .timestamp_every(timestamp_every),
         .s_axis_valid(s_axis_valid),
@@ -44,9 +48,9 @@ module util_upack2_timestamp_tb;
         // Delay to align rising edges of clocks
         #1;
         
-        // Toggle DAC clock at 1/4 rate of DMA clock (providing some space clock cycles in insert timestamps)
+        // Toggle DAC clock at 1/16 rate of DMA clock (providing some space clock cycles in insert timestamps)
         while (1)
-            #4 dac_clk = ~dac_clk;
+            #16 dac_clk = ~dac_clk;
     end
 
     always @(posedge dac_clk) begin
@@ -60,7 +64,8 @@ module util_upack2_timestamp_tb;
     reg mode = MODE_READ_VECTORS;
 
     // Test vector - unpack reset + data bits
-    reg [64:0] expected_outputs [0:56];
+    localparam EXPECTED_OUTPUT_COUNT = 57;
+    reg [64:0] expected_outputs [0:EXPECTED_OUTPUT_COUNT-1];
 
     integer i, j;
     reg ts_req;
@@ -83,9 +88,6 @@ module util_upack2_timestamp_tb;
         // De-assert reset
         @(posedge dac_clk)
         reset <= 1'b0;
-
-        // Wait for FIFO to come out of reset
-        #164;
 
         // Reset sample counter
         j = 0;
@@ -116,13 +118,13 @@ module util_upack2_timestamp_tb;
                         // Provide timestamp
                         case (i)
                             // Timestamp late
-                            1: s_axis_data[63:0] <= timestamp - 2;
+                            1: s_axis_data[63:0] <= timestamp - 10;
                             // Timestamp on time
                             2: s_axis_data[63:0] <= timestamp + 1;
                             // Timestamp early
-                            3: s_axis_data[63:0] <= timestamp + 2;
+                            3: s_axis_data[63:0] <= timestamp + 5;
                             // Timestamp very early
-                            4: s_axis_data[63:0] <= timestamp + 20;
+                            4: s_axis_data[63:0] <= timestamp + 10;
                             // Timestamp waaaay too early
                             5: s_axis_data[63:0] <= timestamp + 200;
                         endcase
@@ -160,12 +162,9 @@ module util_upack2_timestamp_tb;
             s_axis_valid <= 'b0;
             s_axis_xfer_req <= 'b0;
             
-            // Delay for clock cycle
-            #2;
+            // Wait for reads to complete
+            #800;
         end
-
-        // Wait for reads to complete
-        #160;
 
         // Write captured expected vectors out to file
         if (mode == MODE_WRITE_VECTORS)
@@ -194,12 +193,17 @@ module util_upack2_timestamp_tb;
             // Compare to expected (or update expected)
             if (mode == MODE_READ_VECTORS) begin
                 // Compare output to expected
-                if (expected_outputs[expected_index] != {reset_upack, m_axis_valid ? m_axis_data : 64'h0}) begin
-                    $error("Test FAILED, Expected: %b,%h got %b,%h",
+                if (expected_index >= EXPECTED_OUTPUT_COUNT) begin
+                    $error("Test FAILED, Unexpected output data");
+                    //$finish;
+                end
+                else if (expected_outputs[expected_index] != {reset_upack, m_axis_valid ? m_axis_data : 64'h0}) begin
+                    $error("Test FAILED, Expected: %b,%h got %b,%h at index %0d",
                            expected_outputs[expected_index][64],
                            expected_outputs[expected_index][63:0],
                            reset_upack,
-                           m_axis_valid ? m_axis_data : 64'h0);
+                           m_axis_valid ? m_axis_data : 64'h0,
+                           expected_index);
                     $finish;
                 end
             end else begin
