@@ -91,7 +91,7 @@ module util_upack2_timestamp_tb;
         j = 0;
 
         // Perform test with timestamping disabled, enabled and late, enabled and on time, enabled and early, enabled and very early (making DAC domain wait)
-        for (i = 0; i < 5; i = i + 1) begin
+        for (i = 0; i < 6; i = i + 1) begin
             // Set mode
             if (i == 0) begin
                 // Timestamping disabled
@@ -123,6 +123,8 @@ module util_upack2_timestamp_tb;
                             3: s_axis_data[63:0] <= timestamp + 2;
                             // Timestamp very early
                             4: s_axis_data[63:0] <= timestamp + 20;
+                            // Timestamp waaaay too early
+                            5: s_axis_data[63:0] <= timestamp + 200;
                         endcase
 
                         // Assert data valid

@@ -204,19 +204,31 @@ module util_upack2_timestamp #(
     wire [63:0] s_axis_data_timestamp;
     assign s_axis_data_timestamp = s_axis_data[63:0];
 
+    // Calculate if timestamp is way too early, early/ontime or late
+    wire timestamp_too_early;
+    wire timestamp_early_on_time;
+    wire timestamp_late;
+    assign timestamp_too_early = (s_axis_data_timestamp > (timestamp_dma + (timestamp_every * 16))); // Allow timestamp to be upto 16 x timestamp every in the future
+    assign timestamp_early_on_time = (s_axis_data_timestamp >= timestamp_dma);
+    assign timestamp_late = (s_axis_data_timestamp < timestamp_dma);
+
+    // Helper signal
+    wire timestamp_late_or_too_early;
+    assign timestamp_late_or_too_early = (timestamp_too_early || timestamp_late);
+
     // Assign ready output
     // Host should continunue sending if the following condition is met:
     //  Data is valid and:
     //      This block is to be discarded
     //      Timestamping is disabled and a FIFO write is possible
     //      Timestamping is enabled, a timestamp check isn't required and a FIFO write is possible
-    //      Timestamping is enabled, a timestamp check is required and the timestamp is late
-    //      Timestamping is enabled, a timestamp check is required, a FIFO write is possible and the timestamp is on time or early
+    //      Timestamping is enabled, a timestamp check is required and the timestamp is late or way too early (too far in the future)
+    //      Timestamping is enabled, a timestamp check is required, a FIFO write is possible and the timestamp is within allowed range (on time or early, but not too early)
     assign s_axis_ready = s_axis_valid && (    discard_data_reg
                                             || (!timestamp_en && fifo_wr_possible)
                                             || (timestamp_en && !timestamp_req && fifo_wr_possible)
-                                            || (timestamp_en && timestamp_req && (s_axis_data_timestamp < timestamp_dma))
-                                            || (timestamp_en && timestamp_req && fifo_wr_possible && (s_axis_data_timestamp >= timestamp_dma))
+                                            || (timestamp_en && timestamp_req && timestamp_late_or_too_early)
+                                            || (timestamp_en && timestamp_req && fifo_wr_possible && timestamp_early_on_time)
                                           );
 
     // Manage discard data signal
@@ -228,8 +240,8 @@ module util_upack2_timestamp #(
         end else begin     
             if (s_axis_valid && s_axis_ready && timestamp_req) begin
                 // Data is valid and read is being requested. Timestamp check required.
-                // Update discard flag, discarding samples if timestamping is enabled and timestamp is late
-                discard_data_reg <= timestamp_en && (s_axis_data_timestamp < timestamp_dma);
+                // Update discard flag, discarding samples if timestamping is enabled and timestamp is late or way too early (too far in the future)
+                discard_data_reg <= timestamp_en && timestamp_late_or_too_early;
             end
         end     
     end
