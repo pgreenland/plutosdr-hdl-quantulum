@@ -6,10 +6,8 @@ module util_upack2_timestamp #(
   parameter SAMPLE_DATA_WIDTH = 16,
   // Limit of how far a timestamp can be in the future as a multiple of timestamp_every (make it a power of two) 
   parameter TIMESTAMP_LIMIT_EVERY_MULTIPLE = 16,
-  // Perform spot checks on timestamp rather than continuous checks
-  // Normally the module tracks timestamps betweeen blocks based on enabled channels, allowing is to discard late samples within a block  
-  // In spot check mode a single check will be performed at the start of a block, if its late the whole block will be discarded, else the whole block will be accepted  
-  parameter TIMESTAMP_SPOT_CHECK_ONLY = 0
+  // Type of timestamp checking to perform
+  parameter TIMESTAMP_CHECK_TYPE = 0
 ) (
     // DMA clock
     input dma_clk,
@@ -57,6 +55,10 @@ module util_upack2_timestamp #(
     input m_axis_ready, // When high module would like next data block to be loaded into s_axis_data
     output [NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL-1:0] m_axis_data
 );
+    // Timestamp check types
+    localparam TIMESTAMP_CHECK_START_OF_BLOCK = 0;
+    localparam TIMESTAMP_CHECK_CONTINUOUS = 1;
+
     // FIFO write signals
     wire fifo_wr_rst_busy;
     wire fifo_wr_full;
@@ -174,14 +176,14 @@ module util_upack2_timestamp #(
         // Calculate timestamp increment to count it along 
         case (enable_count_dma)
             // Once channel enabled, each 64-bit sample represents 4 samples
-            1: timestamp_step <= 4;
+            1: timestamp_step = 4;
             // Two channels enabled, each 64-bit sample represents 2 samples
-            2: timestamp_step <= 2;
+            2: timestamp_step = 2;
             // Four channels enabled, each 64-bit sample represents 1 sample
-            4: timestamp_step <= 1;
+            4: timestamp_step = 1;
             // No channels enabled, or three channels enabled, freeze timestamp
             // the effect here will be that if a block arrives late the whole block will be discarded
-            default: timestamp_step <= 0;
+            default: timestamp_step = 0;
         endcase
     end
 
@@ -315,7 +317,7 @@ module util_upack2_timestamp #(
     always @(*)
     begin
         // Assume read will not be asserted
-        s_axis_ready <= 'b0;
+        s_axis_ready = 'b0;
 
         if (s_axis_valid)
         begin
@@ -323,27 +325,27 @@ module util_upack2_timestamp #(
             if (timestamp_en)
             begin
                 // Timestamping enabled, consider check mode
-                if (TIMESTAMP_SPOT_CHECK_ONLY)
+                if (TIMESTAMP_CHECK_TYPE == TIMESTAMP_CHECK_START_OF_BLOCK)
                 begin
-                    // Spot check mode
+                    // Start of block check mode (spot check)
                     // Read if:
                     //  Discarding data
                     //  Timestamp has arrived and it's late or too early (will be discarding data)
                     //  Writing possible and not discarding data
-                    s_axis_ready <=    (timestamp_spot_check_discard)
-                                    || (timestamp_req && timestamp_late_or_too_early)
-                                    || (fifo_wr_possible && !timestamp_spot_check_discard);
+                    s_axis_ready =    (timestamp_spot_check_discard)
+                                   || (timestamp_req && timestamp_late_or_too_early)
+                                   || (fifo_wr_possible && !timestamp_spot_check_discard);
                 end else begin
                     // Continuous check mode
                     // Read if:
                     //  Timestamp late or too early
                     //  Writing possible and timestamp within allowed range
-                    s_axis_ready <=    timestamp_late_or_too_early
-                                    || (fifo_wr_possible && !timestamp_late_or_too_early);
+                    s_axis_ready =    timestamp_late_or_too_early
+                                   || (fifo_wr_possible && !timestamp_late_or_too_early);
                 end
             end else begin
                 // Timestamping disabled, read whenever writing possible
-                s_axis_ready <= fifo_wr_possible;
+                s_axis_ready = fifo_wr_possible;
             end
         end
     end
@@ -375,7 +377,7 @@ module util_upack2_timestamp #(
     always @(*)
     begin
         // Assume FIFO wont be written 
-        fifo_wr_en <= 'b0;
+        fifo_wr_en = 'b0;
 
         if (fifo_wr_possible && s_axis_valid && s_axis_ready)
         begin
@@ -386,18 +388,18 @@ module util_upack2_timestamp #(
                 if (!timestamp_req)
                 begin
                     // Consider check mode
-                    if (TIMESTAMP_SPOT_CHECK_ONLY)
+                    if (TIMESTAMP_CHECK_TYPE == TIMESTAMP_CHECK_START_OF_BLOCK)
                     begin
-                        // Spot check mode, write if not discarding data
-                        fifo_wr_en <= !timestamp_spot_check_discard;
+                        // Start of block (spot check) mode, write if not discarding data
+                        fifo_wr_en = !timestamp_spot_check_discard;
                     end else begin
                         // Continuous check mode, write if timestamp within allowed range
-                        fifo_wr_en <= !timestamp_late_or_too_early;
+                        fifo_wr_en = !timestamp_late_or_too_early;
                     end
-                end             
+                end
             end else begin
                // Timestamping disabled, write whenever possible
-               fifo_wr_en <= 'b1;
+               fifo_wr_en = 'b1;
             end
         end
     end

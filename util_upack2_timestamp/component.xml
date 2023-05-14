@@ -186,7 +186,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>8fd9de96</spirit:value>
+            <spirit:value>9e737636</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -202,7 +202,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>7b488eef</spirit:value>
+            <spirit:value>87022f55</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -216,7 +216,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>7f8f96e0</spirit:value>
+            <spirit:value>a62e97c4</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -231,7 +231,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>92051a6e</spirit:value>
+            <spirit:value>d25c46a4</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -394,7 +394,7 @@
           <spirit:direction>out</spirit:direction>
           <spirit:wireTypeDefs>
             <spirit:wireTypeDef>
-              <spirit:typeName>std_logic</spirit:typeName>
+              <spirit:typeName>reg</spirit:typeName>
               <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
               <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
             </spirit:wireTypeDef>
@@ -497,12 +497,19 @@
         <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE">16</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
-        <spirit:name>TIMESTAMP_SPOT_CHECK_ONLY</spirit:name>
-        <spirit:displayName>Timestamp Spot Check Only</spirit:displayName>
-        <spirit:value spirit:format="bool" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY">false</spirit:value>
+        <spirit:name>TIMESTAMP_CHECK_TYPE</spirit:name>
+        <spirit:displayName>Timestamp Check Type</spirit:displayName>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.TIMESTAMP_CHECK_TYPE">0</spirit:value>
       </spirit:modelParameter>
     </spirit:modelParameters>
   </spirit:model>
+  <spirit:choices>
+    <spirit:choice>
+      <spirit:name>choice_pairs_acf7693b</spirit:name>
+      <spirit:enumeration spirit:text="Start of Block (Spot Check)">0</spirit:enumeration>
+      <spirit:enumeration spirit:text="Continuous (Tracking)">1</spirit:enumeration>
+    </spirit:choice>
+  </spirit:choices>
   <spirit:fileSets>
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagesynthesis_view_fileset</spirit:name>
@@ -533,7 +540,7 @@
       <spirit:file>
         <spirit:name>src/util_upack2_timestamp.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_92e74f4d</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_37e73d90</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
@@ -568,7 +575,7 @@
       <spirit:file>
         <spirit:name>xgui/util_upack2_timestamp_v1_0.tcl</spirit:name>
         <spirit:fileType>tclSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_7f8f96e0</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_a62e97c4</spirit:userFileType>
         <spirit:userFileType>XGUI_VERSION_2</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -615,9 +622,9 @@
       <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE">16</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
-      <spirit:name>TIMESTAMP_SPOT_CHECK_ONLY</spirit:name>
-      <spirit:displayName>Perform timestamp spot checks only, rather than continuous checks</spirit:displayName>
-      <spirit:value spirit:format="bool" spirit:resolve="user" spirit:id="PARAM_VALUE.TIMESTAMP_SPOT_CHECK_ONLY">false</spirit:value>
+      <spirit:name>TIMESTAMP_CHECK_TYPE</spirit:name>
+      <spirit:displayName>Timestamp Check Type</spirit:displayName>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.TIMESTAMP_CHECK_TYPE" spirit:choiceRef="choice_pairs_acf7693b">0</spirit:value>
     </spirit:parameter>
   </spirit:parameters>
   <spirit:vendorExtensions>
@@ -644,17 +651,17 @@
       <xilinx:vendorDisplayName>Quantulum Ltd</xilinx:vendorDisplayName>
       <xilinx:vendorURL>https://www.quantulum.co.uk</xilinx:vendorURL>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2023-05-13T21:12:32Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2023-05-14T08:57:50Z</xilinx:coreCreationDateTime>
       <xilinx:tags>
       </xilinx:tags>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.2</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="cdfbfe73"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="e555d498"/>
-      <xilinx:checksum xilinx:scope="ports" xilinx:value="6fa0db13"/>
-      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="26fedf29"/>
-      <xilinx:checksum xilinx:scope="parameters" xilinx:value="7f10774d"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="f9936e6d"/>
+      <xilinx:checksum xilinx:scope="ports" xilinx:value="f5318497"/>
+      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="0bb31d65"/>
+      <xilinx:checksum xilinx:scope="parameters" xilinx:value="af02c521"/>
     </xilinx:packagingInfo>
   </spirit:vendorExtensions>
 </spirit:component>

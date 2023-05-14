@@ -20,7 +20,7 @@ module util_upack2_timestamp_tb;
         .SAMPLE_DATA_WIDTH (16),
         .SAMPLES_PER_CHANNEL (1),
         .TIMESTAMP_LIMIT_EVERY_MULTIPLE (16),
-        .TIMESTAMP_SPOT_CHECK_ONLY (0)
+        .TIMESTAMP_CHECK_TYPE (0) // Start of block / spot check
     ) uut (
         .dma_clk(dma_clk),
         .dac_clk(dac_clk),
