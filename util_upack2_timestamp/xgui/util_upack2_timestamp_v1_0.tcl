@@ -8,8 +8,6 @@ proc init_gui { IPINST } {
   ipgui::add_param $IPINST -name "SAMPLES_PER_CHANNEL"
   ipgui::add_param $IPINST -name "SAMPLE_DATA_WIDTH"
   ipgui::add_param $IPINST -name "TIMESTAMP_LIMIT_EVERY_MULTIPLE"
-  set TIMESTAMP_CHECK_TYPE [ipgui::add_param $IPINST -name "TIMESTAMP_CHECK_TYPE" -widget comboBox]
-  set_property tooltip {Timestamp Check Type} ${TIMESTAMP_CHECK_TYPE}
 
 }
 
@@ -37,15 +35,6 @@ proc update_PARAM_VALUE.SAMPLE_DATA_WIDTH { PARAM_VALUE.SAMPLE_DATA_WIDTH } {
 
 proc validate_PARAM_VALUE.SAMPLE_DATA_WIDTH { PARAM_VALUE.SAMPLE_DATA_WIDTH } {
 	# Procedure called to validate SAMPLE_DATA_WIDTH
-	return true
-}
-
-proc update_PARAM_VALUE.TIMESTAMP_CHECK_TYPE { PARAM_VALUE.TIMESTAMP_CHECK_TYPE } {
-	# Procedure called to update TIMESTAMP_CHECK_TYPE when any of the dependent parameters in the arguments change
-}
-
-proc validate_PARAM_VALUE.TIMESTAMP_CHECK_TYPE { PARAM_VALUE.TIMESTAMP_CHECK_TYPE } {
-	# Procedure called to validate TIMESTAMP_CHECK_TYPE
 	return true
 }
 
@@ -77,10 +66,5 @@ proc update_MODELPARAM_VALUE.SAMPLE_DATA_WIDTH { MODELPARAM_VALUE.SAMPLE_DATA_WI
 proc update_MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE { MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE } {
 	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
 	set_property value [get_property value ${PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE}] ${MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE}
-}
-
-proc update_MODELPARAM_VALUE.TIMESTAMP_CHECK_TYPE { MODELPARAM_VALUE.TIMESTAMP_CHECK_TYPE PARAM_VALUE.TIMESTAMP_CHECK_TYPE } {
-	# Procedure called to set VHDL generic/Verilog parameter value(s) based on TCL parameter value
-	set_property value [get_property value ${PARAM_VALUE.TIMESTAMP_CHECK_TYPE}] ${MODELPARAM_VALUE.TIMESTAMP_CHECK_TYPE}
 }
 

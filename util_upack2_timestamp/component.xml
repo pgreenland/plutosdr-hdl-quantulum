@@ -186,7 +186,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>9e737636</spirit:value>
+            <spirit:value>7b0483bd</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -202,7 +202,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>87022f55</spirit:value>
+            <spirit:value>b0f10370</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -216,7 +216,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>a62e97c4</spirit:value>
+            <spirit:value>2a378039</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -231,7 +231,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>d25c46a4</spirit:value>
+            <spirit:value>c59032f7</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -280,58 +280,6 @@
         <spirit:name>reset_upack</spirit:name>
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
-          <spirit:wireTypeDefs>
-            <spirit:wireTypeDef>
-              <spirit:typeName>std_logic</spirit:typeName>
-              <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
-              <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
-            </spirit:wireTypeDef>
-          </spirit:wireTypeDefs>
-        </spirit:wire>
-      </spirit:port>
-      <spirit:port>
-        <spirit:name>enable_0</spirit:name>
-        <spirit:wire>
-          <spirit:direction>in</spirit:direction>
-          <spirit:wireTypeDefs>
-            <spirit:wireTypeDef>
-              <spirit:typeName>std_logic</spirit:typeName>
-              <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
-              <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
-            </spirit:wireTypeDef>
-          </spirit:wireTypeDefs>
-        </spirit:wire>
-      </spirit:port>
-      <spirit:port>
-        <spirit:name>enable_1</spirit:name>
-        <spirit:wire>
-          <spirit:direction>in</spirit:direction>
-          <spirit:wireTypeDefs>
-            <spirit:wireTypeDef>
-              <spirit:typeName>std_logic</spirit:typeName>
-              <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
-              <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
-            </spirit:wireTypeDef>
-          </spirit:wireTypeDefs>
-        </spirit:wire>
-      </spirit:port>
-      <spirit:port>
-        <spirit:name>enable_2</spirit:name>
-        <spirit:wire>
-          <spirit:direction>in</spirit:direction>
-          <spirit:wireTypeDefs>
-            <spirit:wireTypeDef>
-              <spirit:typeName>std_logic</spirit:typeName>
-              <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
-              <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
-            </spirit:wireTypeDef>
-          </spirit:wireTypeDefs>
-        </spirit:wire>
-      </spirit:port>
-      <spirit:port>
-        <spirit:name>enable_3</spirit:name>
-        <spirit:wire>
-          <spirit:direction>in</spirit:direction>
           <spirit:wireTypeDefs>
             <spirit:wireTypeDef>
               <spirit:typeName>std_logic</spirit:typeName>
@@ -394,7 +342,7 @@
           <spirit:direction>out</spirit:direction>
           <spirit:wireTypeDefs>
             <spirit:wireTypeDef>
-              <spirit:typeName>reg</spirit:typeName>
+              <spirit:typeName>std_logic</spirit:typeName>
               <spirit:viewNameRef>xilinx_anylanguagesynthesis</spirit:viewNameRef>
               <spirit:viewNameRef>xilinx_anylanguagebehavioralsimulation</spirit:viewNameRef>
             </spirit:wireTypeDef>
@@ -496,20 +444,8 @@
         <spirit:displayName>Timestamp Limit Every Multiple</spirit:displayName>
         <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE">16</spirit:value>
       </spirit:modelParameter>
-      <spirit:modelParameter spirit:dataType="integer">
-        <spirit:name>TIMESTAMP_CHECK_TYPE</spirit:name>
-        <spirit:displayName>Timestamp Check Type</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.TIMESTAMP_CHECK_TYPE">0</spirit:value>
-      </spirit:modelParameter>
     </spirit:modelParameters>
   </spirit:model>
-  <spirit:choices>
-    <spirit:choice>
-      <spirit:name>choice_pairs_acf7693b</spirit:name>
-      <spirit:enumeration spirit:text="Start of Block (Spot Check)">0</spirit:enumeration>
-      <spirit:enumeration spirit:text="Continuous (Tracking)">1</spirit:enumeration>
-    </spirit:choice>
-  </spirit:choices>
   <spirit:fileSets>
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagesynthesis_view_fileset</spirit:name>
@@ -526,21 +462,13 @@
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
-        <spirit:name>src/cdc_sync_data_open.v</spirit:name>
-        <spirit:fileType>verilogSource</spirit:fileType>
-      </spirit:file>
-      <spirit:file>
-        <spirit:name>src/count_bits.v</spirit:name>
-        <spirit:fileType>verilogSource</spirit:fileType>
-      </spirit:file>
-      <spirit:file>
         <spirit:name>src/grey_to_binary.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
         <spirit:name>src/util_upack2_timestamp.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_37e73d90</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_5feca48d</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
@@ -551,14 +479,6 @@
       </spirit:file>
       <spirit:file>
         <spirit:name>src/cdc_sync_bits.v</spirit:name>
-        <spirit:fileType>verilogSource</spirit:fileType>
-      </spirit:file>
-      <spirit:file>
-        <spirit:name>src/cdc_sync_data_open.v</spirit:name>
-        <spirit:fileType>verilogSource</spirit:fileType>
-      </spirit:file>
-      <spirit:file>
-        <spirit:name>src/count_bits.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
@@ -575,7 +495,7 @@
       <spirit:file>
         <spirit:name>xgui/util_upack2_timestamp_v1_0.tcl</spirit:name>
         <spirit:fileType>tclSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_a62e97c4</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_2a378039</spirit:userFileType>
         <spirit:userFileType>XGUI_VERSION_2</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -621,11 +541,6 @@
       <spirit:displayName>Timestamp limit (in the future) as a multiple of timestamp every</spirit:displayName>
       <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.TIMESTAMP_LIMIT_EVERY_MULTIPLE">16</spirit:value>
     </spirit:parameter>
-    <spirit:parameter>
-      <spirit:name>TIMESTAMP_CHECK_TYPE</spirit:name>
-      <spirit:displayName>Timestamp Check Type</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.TIMESTAMP_CHECK_TYPE" spirit:choiceRef="choice_pairs_acf7693b">0</spirit:value>
-    </spirit:parameter>
   </spirit:parameters>
   <spirit:vendorExtensions>
     <xilinx:coreExtensions>
@@ -651,17 +566,17 @@
       <xilinx:vendorDisplayName>Quantulum Ltd</xilinx:vendorDisplayName>
       <xilinx:vendorURL>https://www.quantulum.co.uk</xilinx:vendorURL>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2023-05-14T08:57:50Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2023-05-15T09:14:01Z</xilinx:coreCreationDateTime>
       <xilinx:tags>
       </xilinx:tags>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.2</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="cdfbfe73"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="f9936e6d"/>
-      <xilinx:checksum xilinx:scope="ports" xilinx:value="f5318497"/>
-      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="0bb31d65"/>
-      <xilinx:checksum xilinx:scope="parameters" xilinx:value="af02c521"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="2bde974b"/>
+      <xilinx:checksum xilinx:scope="ports" xilinx:value="4245e3ba"/>
+      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="05b162dd"/>
+      <xilinx:checksum xilinx:scope="parameters" xilinx:value="6ce52779"/>
     </xilinx:packagingInfo>
   </spirit:vendorExtensions>
 </spirit:component>

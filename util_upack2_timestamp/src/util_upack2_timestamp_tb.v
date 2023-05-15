@@ -19,17 +19,12 @@ module util_upack2_timestamp_tb;
         .NUM_OF_CHANNELS (4),
         .SAMPLE_DATA_WIDTH (16),
         .SAMPLES_PER_CHANNEL (1),
-        .TIMESTAMP_LIMIT_EVERY_MULTIPLE (16),
-        .TIMESTAMP_CHECK_TYPE (0) // Start of block / spot check
+        .TIMESTAMP_LIMIT_EVERY_MULTIPLE (16)
     ) uut (
         .dma_clk(dma_clk),
         .dac_clk(dac_clk),
         .reset(reset),
         .reset_upack(reset_upack),
-        .enable_3('b1), // Fixed four channels enabled such that timestamp is expected to increase by one for each 64-bit read
-        .enable_2('b1),
-        .enable_1('b1),
-        .enable_0('b1),
         .timestamp(timestamp),
         .timestamp_every(timestamp_every),
         .s_axis_valid(s_axis_valid),
