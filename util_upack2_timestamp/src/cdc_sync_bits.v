@@ -19,10 +19,10 @@ module cdc_sync_bits #(
 
     // Output domain clock reset
     input reset,
-    
+
     // Input data
     input [NUM_BITS-1:0] bits_in,
-    
+
     // Output data
     output [NUM_BITS-1:0] bits_out
 );

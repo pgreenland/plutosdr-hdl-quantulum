@@ -75,7 +75,7 @@ module util_cpack2_timestamp #(
         .empty(fifo_rd_empty),
         .rd_en(fifo_rd_en),
         .dout(fifo_rd_data),
-        
+
         .sleep('b0)
     );
 
@@ -87,7 +87,7 @@ module util_cpack2_timestamp #(
     wire fifo_rd_possible;
     assign fifo_rd_possible = !fifo_rd_rst_busy && !fifo_rd_empty;
 
-    // Combine write data - sync signal + 64-bit timestamp + samples 
+    // Combine write data - sync signal + 64-bit timestamp + samples
     assign fifo_wr_data = {packed_fifo_wr_sync, timestamp, packed_fifo_wr_data};
 
     // Calculate fifo write enable - write if space available and data is valid
@@ -109,7 +109,7 @@ module util_cpack2_timestamp #(
     wire timestamp_en;
     assign timestamp_en = (timestamp_every != 0);
     wire timestamp_req;
-    assign timestamp_req = (timestamp_counter == 0);  
+    assign timestamp_req = (timestamp_counter == 0);
 
     // Manage timestamp counter
     always @(posedge dma_clk) begin
@@ -122,7 +122,7 @@ module util_cpack2_timestamp #(
             if (timestamp_counter >= timestamp_every) begin
                 // Reset counter
                 timestamp_counter <= 0;
-    
+
             end else begin
                 // Increment counter
                 timestamp_counter <= timestamp_counter + 1;
@@ -173,7 +173,7 @@ module util_cpack2_timestamp #(
     wire curr_or_delayed_packed_timestamped_fifo_wr_overflow;
     assign curr_or_delayed_packed_timestamped_fifo_wr_overflow = packed_timestamped_fifo_wr_overflow || delayed_packed_timestamped_fifo_wr_overflow_reg;
 
-    cdc_sync_data_closed #( 
+    cdc_sync_data_closed #(
         .NUM_BITS (1)
     ) overflow_sync (
         .clk_in(dma_clk),
@@ -195,7 +195,7 @@ module util_cpack2_timestamp #(
             if (packed_timestamped_fifo_wr_overflow) begin
                 // Hold delayed value such that it will be reported when the syncronizer is ready again
                 delayed_packed_timestamped_fifo_wr_overflow_reg <= 'b1;
-            end           
+            end
         end
     end
 endmodule

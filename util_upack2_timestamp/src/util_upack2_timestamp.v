@@ -4,7 +4,7 @@ module util_upack2_timestamp #(
   parameter NUM_OF_CHANNELS = 4,
   parameter SAMPLES_PER_CHANNEL = 1,
   parameter SAMPLE_DATA_WIDTH = 16,
-  // Limit of how far a timestamp can be in the future as a multiple of timestamp_every (make it a power of two) 
+  // Limit of how far a timestamp can be in the future as a multiple of timestamp_every (make it a power of two)
   parameter TIMESTAMP_LIMIT_EVERY_MULTIPLE = 16
 ) (
     // DMA clock
@@ -112,8 +112,8 @@ module util_upack2_timestamp #(
         if (!fifo_wr_en) begin
             held_transfer_start_dma <= transfer_start_dma;
         end else begin
-            held_transfer_start_dma <= 'b0;       
-        end 
+            held_transfer_start_dma <= 'b0;
+        end
     end
 
     // A transfer has started on rising edge of xfer_req signal
@@ -182,7 +182,7 @@ module util_upack2_timestamp #(
     wire timestamp_en;
     assign timestamp_en = (timestamp_every != 0);
     wire timestamp_req;
-    assign timestamp_req = (timestamp_counter == 0);  
+    assign timestamp_req = (timestamp_counter == 0);
 
     // Manage timestamp counter
     always @(posedge dma_clk) begin
@@ -221,10 +221,10 @@ module util_upack2_timestamp #(
             // Reset discard reg
             timestamp_check_discard <= 'b0;
 
-        end else begin     
+        end else begin
             if (s_axis_valid && s_axis_ready && timestamp_req) begin
                 // Data is valid and read is being requested, timestamp expected, set discard status
-                timestamp_check_discard <= timestamp_late_or_too_early;            
+                timestamp_check_discard <= timestamp_late_or_too_early;
             end
         end
     end
@@ -253,7 +253,7 @@ module util_upack2_timestamp #(
             last_timestamp <= 'h0;
             timestamp_valid <= 'b0;
 
-        end else begin     
+        end else begin
             if (s_axis_valid && s_axis_ready && timestamp_en && timestamp_req) begin
                 // Data is valid and read is being requested. Timestamp enabled and check required (therefore timestamp present).
                 // Capture timestamp and set valid flag
@@ -265,7 +265,7 @@ module util_upack2_timestamp #(
                 timestamp_valid <= 'b0;
             end
         end
-    end 
+    end
 
     // Assign fifo write enable
     // Write if:
@@ -286,7 +286,7 @@ module util_upack2_timestamp #(
     always @(posedge dac_clk) begin
         // Only update last transfer status if fifo output is valid
         if (fifo_rd_possible) begin
-            last_transfer_start_dac <= transfer_start_dac; 
+            last_transfer_start_dac <= transfer_start_dac;
         end
     end
 
@@ -298,7 +298,7 @@ module util_upack2_timestamp #(
     reg transfer_start_rising_delayed_dac = 'b0;
 
     always @(posedge dac_clk) begin
-        transfer_start_rising_delayed_dac <= transfer_start_rising_dac; 
+        transfer_start_rising_delayed_dac <= transfer_start_rising_dac;
     end
 
     // Combine rising edge and delayed signals to form two cycle wide pulse

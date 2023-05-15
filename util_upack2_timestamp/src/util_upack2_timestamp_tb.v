@@ -15,7 +15,7 @@ module util_upack2_timestamp_tb;
     wire m_axis_ready;
     wire [63:0] m_axis_data;
 
-    util_upack2_timestamp #( 
+    util_upack2_timestamp #(
         .NUM_OF_CHANNELS (4),
         .SAMPLE_DATA_WIDTH (16),
         .SAMPLES_PER_CHANNEL (1),
@@ -44,7 +44,7 @@ module util_upack2_timestamp_tb;
     always begin
         // Delay to align rising edges of clocks
         #1;
-        
+
         // Toggle DAC clock at 1/16 rate of DMA clock (providing some space clock cycles in insert timestamps)
         while (1)
             #16 dac_clk = ~dac_clk;
@@ -53,7 +53,7 @@ module util_upack2_timestamp_tb;
     always @(posedge dac_clk) begin
         // Increment timestamp
         timestamp <= timestamp + 1;
-    end 
+    end
 
     // Test mode
     localparam MODE_READ_VECTORS = 0;
@@ -106,7 +106,7 @@ module util_upack2_timestamp_tb;
 
             // Iterate through test values
             ts_req = 'b1;
-            while (j < ((i + 1) * 48)) begin          
+            while (j < ((i + 1) * 48)) begin
                 // Provide data on first step, or if ready asserted
                 @(posedge dma_clk)
                 if (!s_axis_valid || s_axis_ready) begin
@@ -128,7 +128,7 @@ module util_upack2_timestamp_tb;
 
                         // Assert data valid
                         s_axis_valid <= 'b1;
-                        
+
                         // Clear timestamp required
                         ts_req <= 'b0;
                     end else begin
@@ -138,7 +138,7 @@ module util_upack2_timestamp_tb;
                         s_axis_data[16+:16] <= j+2;
                         s_axis_data[0+:16] <= j+1;
                         s_axis_valid <= 'b1;
-                
+
                         // Increment index
                         j = j + 4;
 
@@ -147,18 +147,18 @@ module util_upack2_timestamp_tb;
                     end
                 end
             end
-           
+
             // Wait for final value to be consumed
             @(posedge dma_clk)
             while (!s_axis_ready) begin
-                #2;       
+                #2;
             end
 
             // Clear valid flag, reset data and deassert transfer request
             s_axis_data <= 'h0;
             s_axis_valid <= 'b0;
             s_axis_xfer_req <= 'b0;
-            
+
             // Wait for reads to complete
             #800;
         end
@@ -173,7 +173,7 @@ module util_upack2_timestamp_tb;
         // All done
         $finish;
     end
-   
+
     // Wait for valid signal and print data
     integer expected_index = 0;
     always @(posedge dac_clk) begin
@@ -204,9 +204,9 @@ module util_upack2_timestamp_tb;
                     $finish;
                 end
             end else begin
-                // Store output as expected         
+                // Store output as expected
                 expected_outputs[expected_index] = {reset_upack, m_axis_valid ? m_axis_data : 64'h0};
-            end          
+            end
 
             // Increment index
             expected_index = expected_index + 1;

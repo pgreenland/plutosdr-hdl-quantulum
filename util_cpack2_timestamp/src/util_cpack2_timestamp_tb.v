@@ -14,7 +14,7 @@ module util_cpack2_timestamp_tb;
     wire packed_timestamped_fifo_wr_sync;
     wire [63:0] packed_timestamped_fifo_wr_data;
 
-    util_cpack2_timestamp #( 
+    util_cpack2_timestamp #(
         .NUM_OF_CHANNELS (4),
         .SAMPLE_DATA_WIDTH (16),
         .SAMPLES_PER_CHANNEL (1)
@@ -36,7 +36,7 @@ module util_cpack2_timestamp_tb;
     always begin
         // Delay to align rising edges of clocks
         #1;
-        
+
         // Toggle ADC clock at 1/16 rate of DMA clock (providing some space clock cycles in insert timestamps)
         while (1)
             #16 adc_clk = ~adc_clk;
@@ -50,7 +50,7 @@ module util_cpack2_timestamp_tb;
     always @(posedge adc_clk) begin
         // Increment timestamp on every ADC clock cycle
         timestamp = timestamp + 1;
-    end   
+    end
 
     // Test mode
     localparam MODE_READ_VECTORS = 0;
@@ -140,7 +140,7 @@ module util_cpack2_timestamp_tb;
         if (packed_timestamped_fifo_wr_en == 'b1) begin
             // Print values
             $display("Output: %b,%h", packed_timestamped_fifo_wr_sync, packed_timestamped_fifo_wr_data);
-            
+
             // Compare to expected (or update expected)
             if (mode == MODE_READ_VECTORS) begin
                 // Compare output to expected
@@ -158,9 +158,9 @@ module util_cpack2_timestamp_tb;
                     $finish;
                 end
             end else begin
-                // Store output as expected         
+                // Store output as expected
                 expected_outputs[expected_index] = {packed_timestamped_fifo_wr_sync, packed_timestamped_fifo_wr_data};
-            end          
+            end
 
             // Increment index
             expected_index = expected_index + 1;

@@ -41,7 +41,7 @@ module cdc_sync_data_closed #(
 );
     // Input register - holding data frozen in input domain
     (* ASYNC_REG = "TRUE" *) reg [NUM_BITS-1:0] input_reg = 'h0;
-    
+
     // Output register - holding data captured from input domain
     (* QUANTULUM_LTD_FALSE_PATH = 1 *) (* ASYNC_REG = "TRUE" *) reg [NUM_BITS-1:0] output_reg = 'h0;
 
@@ -50,7 +50,7 @@ module cdc_sync_data_closed #(
 
     // Write request (input clock domain)
     reg req_in = 'b0;
-    
+
     // Write request (output clock domain)
     wire req_out;
 
@@ -84,7 +84,7 @@ module cdc_sync_data_closed #(
         if (enable && req_in == ack_in) begin
             // Input enabled and last request acknowledged, load next data
             input_reg <= bits_in;
-            
+
             // Toggle request to signal to output clock domain
             req_in <= ~req_in;
         end
@@ -106,7 +106,7 @@ module cdc_sync_data_closed #(
         end else begin
             // Flag output invalid
             output_valid_reg <= 'b0;
-        end    
+        end
     end
 
     // Drive outputs from registers
