@@ -143,48 +143,53 @@ module util_upack2_timestamp #(
     assign timestamp_dac = fifo_rd_data[NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL +: 64];
     assign m_axis_data = fifo_rd_data[0 +: NUM_OF_CHANNELS*SAMPLE_DATA_WIDTH*SAMPLES_PER_CHANNEL];
 
-    // Count number of set enable lines, cross clock domain and calculate timestamp step
-    wire [3:0] enables;
-    assign enables = {enable_3, enable_2, enable_1, enable_0}; 
-    wire [2:0] enable_count_dac;
-    wire [2:0] enable_count_dma;
+    // Timestamp step for continuous check
     reg [2:0] timestamp_step;
 
-    // Count number of bits
-    count_bits #(
-        .BITS_WIDTH(4)
-    )
-    enable_line_counter (
-        .bits(enables),
-        .count(enable_count_dac)
-    );
-
-    // Synchronize count from DAC to DMA clock domains
-    cdc_sync_data_open #(
-        .NUM_BITS(3)
-    ) sync_enable_line_counter_dac_to_dma (
-        .clk_in(dac_clk),
-        .clk_out(dma_clk),
-        .enable('b1),
-        .bits_in(enable_count_dac),
-        .bits_out(enable_count_dma)
-    );
-
-    // Calculate timestamp step
-    always @(*)
+    if (TIMESTAMP_CHECK_TYPE == TIMESTAMP_CHECK_CONTINUOUS)
     begin
-        // Calculate timestamp increment to count it along 
-        case (enable_count_dma)
-            // Once channel enabled, each 64-bit sample represents 4 samples
-            1: timestamp_step = 4;
-            // Two channels enabled, each 64-bit sample represents 2 samples
-            2: timestamp_step = 2;
-            // Four channels enabled, each 64-bit sample represents 1 sample
-            4: timestamp_step = 1;
-            // No channels enabled, or three channels enabled, freeze timestamp
-            // the effect here will be that if a block arrives late the whole block will be discarded
-            default: timestamp_step = 0;
-        endcase
+        // Count number of set enable lines, cross clock domain and calculate timestamp step
+        wire [3:0] enables;
+        assign enables = {enable_3, enable_2, enable_1, enable_0}; 
+        wire [2:0] enable_count_dac;
+        wire [2:0] enable_count_dma;
+
+        // Count number of bits
+        count_bits #(
+            .BITS_WIDTH(4)
+        )
+        enable_line_counter (
+            .bits(enables),
+            .count(enable_count_dac)
+        );
+    
+        // Synchronize count from DAC to DMA clock domains
+        cdc_sync_data_open #(
+            .NUM_BITS(3)
+        ) sync_enable_line_counter_dac_to_dma (
+            .clk_in(dac_clk),
+            .clk_out(dma_clk),
+            .enable('b1),
+            .bits_in(enable_count_dac),
+            .bits_out(enable_count_dma)
+        );
+
+        // Calculate timestamp step
+        always @(*)
+        begin
+            // Calculate timestamp increment to count it along 
+            case (enable_count_dma)
+                // Once channel enabled, each 64-bit sample represents 4 samples
+                1: timestamp_step = 4;
+                // Two channels enabled, each 64-bit sample represents 2 samples
+                2: timestamp_step = 2;
+                // Four channels enabled, each 64-bit sample represents 1 sample
+                4: timestamp_step = 1;
+                // No channels enabled, or three channels enabled, freeze timestamp
+                // the effect here will be that if a block arrives late the whole block will be discarded
+                default: timestamp_step = 0;
+            endcase
+        end
     end
 
     // Cross clock domain with timestamp
@@ -259,56 +264,68 @@ module util_upack2_timestamp #(
     wire [63:0] s_axis_data_timestamp;
     assign s_axis_data_timestamp = s_axis_data[63:0];
 
+    // Define timestamp to check against
+    wire [63:0] timestamp_to_check;
+
     // Tracking timestamp, updated whenever timestamp expected and incremented to track expected timestamp
     // allows late samples within a block to be discarded
     reg [63:0] tracking_timestamp_reg = 'h0;
 
-    // Decide which timestamp to use for checks below
-    // Use inbound data when timestamp arriving and tracking register after
-    wire [63:0] timestamp_to_check;
-    assign timestamp_to_check = timestamp_req ? s_axis_data_timestamp : tracking_timestamp_reg;
+    if (TIMESTAMP_CHECK_TYPE == TIMESTAMP_CHECK_CONTINUOUS)
+    begin
+        // Decide which timestamp to use for checks below
+        // Use inbound data when timestamp arriving and tracking register after
+        assign timestamp_to_check = timestamp_req ? s_axis_data_timestamp : tracking_timestamp_reg;
+    end else begin
+        // Decide which timestamp to use for checks below
+        // Use inbound data when timestamp arriving and tracking register after
+        assign timestamp_to_check = s_axis_data_timestamp;    
+    end
 
     // Calculate if timestamp is too far in the future or late, if not it's good
     wire timestamp_late_or_too_early;
     assign timestamp_late_or_too_early =    (timestamp_to_check < timestamp_dma) // Late
                                          || (timestamp_to_check > (timestamp_dma + (timestamp_every * TIMESTAMP_LIMIT_EVERY_MULTIPLE))); // Too early
 
-    // Manage tracking timestamp
-    always @(posedge dma_clk) begin
-        if (!s_axis_xfer_req) begin
-            // Reset tracking timestamp
-            tracking_timestamp_reg <= 'h0;
-
-        end else begin     
-            if (s_axis_valid && s_axis_ready) begin
-                // Data is valid and read is being requested
-                if (timestamp_req) begin
-                    // Timestamp expected
-                    // Capture timestamp in the hope that if data is being discarded we may be able to catch up
-                    tracking_timestamp_reg <= s_axis_data_timestamp;
-
-                end else begin
-                    // Timestamp not expected                   
-                    // Increment tracking timestamp
-                    tracking_timestamp_reg <= tracking_timestamp_reg + timestamp_step;
-                end             
-            end
-        end
-    end
-
     // Timestamp spot check discard register
     reg timestamp_spot_check_discard = 'b0;
 
-    // Manage timestamp spot check
-    always @(posedge dma_clk) begin
-        if (!s_axis_xfer_req) begin
-            // Reset discard reg
-            timestamp_spot_check_discard <= 'b0;
-
-        end else begin     
-            if (s_axis_valid && s_axis_ready && timestamp_req) begin
-                // Data is valid and read is being requested, timestamp expected, set discard status
-                timestamp_spot_check_discard <= timestamp_late_or_too_early;            
+    if (TIMESTAMP_CHECK_TYPE == TIMESTAMP_CHECK_CONTINUOUS)
+    begin
+        // Manage tracking timestamp
+        always @(posedge dma_clk) begin
+            if (!s_axis_xfer_req) begin
+                // Reset tracking timestamp
+                tracking_timestamp_reg <= 'h0;
+    
+            end else begin     
+                if (s_axis_valid && s_axis_ready) begin
+                    // Data is valid and read is being requested
+                    if (timestamp_req) begin
+                        // Timestamp expected
+                        // Capture timestamp in the hope that if data is being discarded we may be able to catch up
+                        tracking_timestamp_reg <= s_axis_data_timestamp;
+    
+                    end else begin
+                        // Timestamp not expected                   
+                        // Increment tracking timestamp
+                        tracking_timestamp_reg <= tracking_timestamp_reg + timestamp_step;
+                    end             
+                end
+            end
+        end
+    end else begin   
+        // Manage timestamp spot check
+        always @(posedge dma_clk) begin
+            if (!s_axis_xfer_req) begin
+                // Reset discard reg
+                timestamp_spot_check_discard <= 'b0;
+    
+            end else begin     
+                if (s_axis_valid && s_axis_ready && timestamp_req) begin
+                    // Data is valid and read is being requested, timestamp expected, set discard status
+                    timestamp_spot_check_discard <= timestamp_late_or_too_early;            
+                end
             end
         end
     end
