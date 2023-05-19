@@ -36,6 +36,9 @@ module util_upack2_timestamp #(
     */
     input [31:0] timestamp_every,
 
+    /* Discarded block count - in DMA clock domain */
+    output [31:0] discarded_block_count,
+
     // Stream input, in DMA clock domain
     input s_axis_valid, // When high s_axis_data contains valid data
     output s_axis_ready, // When high module would like next data block to be loaded into s_axis_data
@@ -215,6 +218,10 @@ module util_upack2_timestamp #(
     // Timestamp check discard register
     reg timestamp_check_discard = 'b0;
 
+    // Discarded block count
+    reg [31:0] timestamp_discard_count = 0;
+    assign discarded_block_count = timestamp_discard_count;
+
     // Manage timestamp check
     always @(posedge dma_clk) begin
         if (!s_axis_xfer_req) begin
@@ -225,6 +232,9 @@ module util_upack2_timestamp #(
             if (s_axis_valid && s_axis_ready && timestamp_req) begin
                 // Data is valid and read is being requested, timestamp expected, set discard status
                 timestamp_check_discard <= timestamp_late_or_too_early;
+
+                // Count discarded block
+                if (timestamp_late_or_too_early) timestamp_discard_count <= timestamp_discard_count + 1;
             end
         end
     end

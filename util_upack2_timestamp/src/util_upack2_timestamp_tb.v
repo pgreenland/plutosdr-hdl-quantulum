@@ -7,6 +7,7 @@ module util_upack2_timestamp_tb;
     wire reset_upack;
     reg [63:0] timestamp;
     reg [31:0] timestamp_every;
+    wire [31:0] discarded_block_count;
     reg s_axis_valid;
     wire s_axis_ready;
     reg s_axis_xfer_req;
@@ -27,6 +28,7 @@ module util_upack2_timestamp_tb;
         .reset_upack(reset_upack),
         .timestamp(timestamp),
         .timestamp_every(timestamp_every),
+        .discarded_block_count(discarded_block_count),
         .s_axis_valid(s_axis_valid),
         .s_axis_ready(s_axis_ready),
         .s_axis_xfer_req(s_axis_xfer_req),
